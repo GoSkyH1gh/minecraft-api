@@ -88,6 +88,11 @@ def main(page: ft.Page):
             page.update()
         guild_members = []
         guild_members = user1.get_guild_info()
+        print(guild_members)
+        
+        if guild_members == None:
+            guild_showcase_col.controls.clear()
+            page.update()
 
         if reload_needed:
             guild_showcase_col.controls.clear()
