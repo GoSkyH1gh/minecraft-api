@@ -34,11 +34,20 @@ class getHypixelData:
                 params = payload,
                 headers = {"API-Key": self.api_key}
                 )
+            
+            player_data.raise_for_status()
+
             json_player_data = player_data.json()
 
             first_login_formatted = None
             player_rank = None
 
+
+
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP error occured: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"Request exception occured: {e}")
         except Exception as e:
             print(f"something went wrong while getting Hypixel player data: {e}")
             return False
@@ -77,20 +86,24 @@ class getHypixelData:
                 headers = {"API-Key": self.api_key}
             )
 
-            print(guild_response.text)
+            guild_response.raise_for_status()
+
+            print(guild_response)
             if guild_response.json()["guild"] == None:
                 print("no guild")
                 return None
+            
             members = guild_response.json()["guild"]["members"]
             guild_members = []
             for index, member in enumerate(members):
-                if index < 10:
-                    print(f"{index + 1}: {member["uuid"]}")
+                if index < 10: # gets the first x members of the guild
                     guild_members.append(member["uuid"])
 
             return guild_members
-            #with open("guild_output.json", "w", encoding="utf-8") as file:
-            #    json.dump(guild_response.json(), file, indent=4)
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP error occured: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"Request exception occured: {e}")
         except KeyError as e:
             print(f"coudn't find {e}")
         except Exception as e:
