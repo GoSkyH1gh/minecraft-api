@@ -9,6 +9,7 @@ import time
 import threading
 import io
 import base64
+import json
 
 # contains flet ui and calls other modules
 
@@ -18,6 +19,7 @@ cape_id = ""
 uuid = ""
 cape_showcase = None
 cape_back = None
+favorites_location = os.path.join(os.path.dirname(__file__), "favorites.json")
 
 def pillow_to_b64(pil_image, img_format = "PNG"):
     buffered = io.BytesIO()
@@ -60,11 +62,11 @@ def main(page: ft.Page):
         if e.data == "true":
             if has_cape:
                 cape_showcase_img.src_base64 = pillow_to_b64(cape_back)
-                page.update()
+                cape_showcase_img.update()
         else:
             if has_cape:
                 cape_showcase_img.src_base64 = pillow_to_b64(cape_showcase)        
-                page.update()
+                cape_showcase_img.update()
     
     def update_contents(data_entered, reload_needed = True):
         global cape_id
@@ -72,6 +74,7 @@ def main(page: ft.Page):
         global has_cape
         global cape_showcase
         global cape_back
+        global formated_username
 
         skin_showcase_img.scale = 0.3
         page.update()
@@ -86,9 +89,10 @@ def main(page: ft.Page):
             formated_username_text.value = "Lookup failed"
             uuid_text.value = ""
             skin_showcase_img.src = "None.png"
-            cape_showcase_img.src = "None.png"
+            cape_showcase_img.src_base64 = ""
             cape_name.value = ""
             guild_list_view.controls.clear()
+            hypixel_info_card.visible = False
         else:
             formated_username_text.value = formated_username
             uuid_text.value = f"uuid: {uuid}"
@@ -109,26 +113,45 @@ def main(page: ft.Page):
             else:
                 cape_showcase_img.src_base64 = pillow_to_b64(Image.open(os.path.join(os.path.dirname(__file__), "cape", "no_cape.png")))
                 cape_name.value = ""
-        
+
         skin_showcase_img.scale = 1 # animates skin showcase img
 
-        # --- Hypixel api integration ---
-        api_key = os.getenv("hypixel_api_key")
-        user1 = getHypixelData(uuid, api_key)
-        first_login, player_rank = user1.get_basic_data()
-        if first_login != None and player_rank != None:
-            first_login_text.value = f"Account first saw on: {first_login}"
-            player_rank_text.value = player_rank
-            page.update()
+        # checks if user is in favorites
+        favorites = load_favorites()
+        if not lookup_failed:
+            favorite_chip.visible = True
+            if {"name": formated_username, "uuid": uuid} in favorites:
+                favorite_chip.icon = ft.Icons.FAVORITE_SHARP
+            else:
+                favorite_chip.icon = ft.Icons.FAVORITE_OUTLINE
         else:
-            first_login_text.value = ""
-            player_rank_text.value = ""
-            page.update()
-        guild_members = []
-        guild_members = user1.get_guild_info()
-        print(guild_members)
+            favorite_chip.visible = False
+        page.update()
 
-        if guild_members == None:
+
+        # --- Hypixel api integration ---
+        if not lookup_failed:
+            api_key = os.getenv("hypixel_api_key")
+            user1 = getHypixelData(uuid, api_key)
+            first_login, player_rank = user1.get_basic_data()
+            if first_login != None and player_rank != None:
+                hypixel_info_card.visible = True
+                first_login_text.value = f"Account first saw on: {first_login}"
+                player_rank_text.value = player_rank
+                page.update()
+            else:
+                first_login_text.value = ""
+                player_rank_text.value = ""
+                page.update()
+            guild_members = []
+            guild_members = user1.get_guild_info()
+            print(guild_members)
+        else:
+            guild_list_view.controls.clear()
+            page.update()
+            return
+
+        if guild_members is None:
             guild_list_view.controls.clear()
             page.update()
 
@@ -141,7 +164,39 @@ def main(page: ft.Page):
                     if guild_member_name is not None:
                         guild_list_view.controls.append(ft.Button(text = guild_member_name, on_click = lambda e, name_to_pass = guild_member_name: update_contents(name_to_pass, False)))
                         page.update()
+
+    def favorites_clicked(e):
+        # get data from favorites.json
+        favorites = load_favorites()
+
+        new_favorite = {"name": formated_username, "uuid": uuid}
+
+        if new_favorite not in favorites:
+            favorites.append(new_favorite)
+            print(f"you added {formated_username} to favorites!\nuuid: {uuid}")
+            favorite_chip.icon = ft.Icons.FAVORITE_SHARP
+            favorite_chip.update()
+        else:
+            favorites.remove(new_favorite)
+            print(f"you removed {formated_username} from favorites")
+            favorite_chip.icon = ft.Icons.FAVORITE_OUTLINE
+            favorite_chip.update()
+
+        # write new favorites.json
+        try:
+            with open(favorites_location, "w", encoding = "utf-8") as file:
+                json.dump(favorites, file, indent = 4)
+        except Exception as e:
+            print(f"Something went wrong while saving favorites: {e}")
     
+    def load_favorites():
+        try:
+            with open(favorites_location, "r", encoding = "utf-8") as file:
+                return json.load(file)
+            
+        except Exception as e:
+            print(f"Something went while reading favorites.json: {e}")
+            return []
     # --- tab 1 (home) ---
     
     username_entry = ft.TextField(border_color = "#EECCDD", on_submit = get_data_from_button, hint_text="Search by username or UUID")
@@ -153,12 +208,24 @@ def main(page: ft.Page):
     formated_username_text = ft.Text(size=30)
     uuid_text = ft.Text(selectable = True)
 
-    info = ft.Column(controls = [formated_username_text, uuid_text])
+    favorite_chip = ft.IconButton(
+        icon = ft.Icons.FAVORITE_BORDER_OUTLINED,
+        icon_color = ft.Colors.RED_400,
+        on_click = favorites_clicked,
+        visible = False
+    )
+
+    favorite_chip_c = ft.Container(content = favorite_chip, padding = ft.padding.only(top = 5))
+
+    username_row = ft.Row(controls = [formated_username_text, favorite_chip_c])
+
+    info = ft.Column(controls = [username_row, uuid_text])
     info_c = ft.Container(content = info, padding = ft.padding.only(120, 10))
     
     skin_showcase_img = ft.Image(
         src="None.png", height = 200, fit = ft.ImageFit.FILL, filter_quality = ft.FilterQuality.NONE, scale = 0.3, animate_scale=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
         )
+    
     cape_showcase_img = ft.Image(src="None.png", height = 150, fit = ft.ImageFit.FILL, filter_quality = ft.FilterQuality.NONE)
 
     cape_showcase_img_c = ft.Container(content = cape_showcase_img, on_hover=cape_hover)
@@ -176,7 +243,8 @@ def main(page: ft.Page):
         alignment=ft.alignment.top_center
         ),
         elevation = 1,
-        margin = ft.padding.only(right = 60)
+        margin = ft.padding.only(right = 60),
+        visible = False
         
     )
     

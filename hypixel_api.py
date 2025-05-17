@@ -9,7 +9,8 @@ rank_map = {
     "VIP": "VIP",
     "VIP_PLUS": "VIP+",
     "MVP": "MVP",
-    "MVP_PLUS": "MVP+"
+    "MVP_PLUS": "MVP+",
+    "YOUTUBER": "YouTube"
 }
 
 
@@ -54,23 +55,33 @@ class getHypixelData:
         try:
             with open("hypixel_player_data.json", "w", encoding="utf-8") as file:
                 json.dump(json_player_data, file, indent = 4)
-
-            first_login = json_player_data["player"]["firstLogin"] / 1000 # transforms to standard (non miliseconds) UNIX time
-            first_login_formatted = datetime.datetime.fromtimestamp(first_login).strftime("%m/%Y")
-            player_rank = json_player_data["player"]["newPackageRank"]
-
-            try:
-                player_rank_formatted = rank_map[player_rank]
-            except KeyError:
-                player_rank_formatted = player_rank
-
-            return first_login_formatted, player_rank_formatted
-        except KeyError:
-            print("player has no rank")
-            return first_login_formatted, "no rank"
         except Exception as e:
             print(f"Something went wrong while proccessing Hypixel data: {e}")
             return None, None
+        try:
+            first_login = json_player_data["player"]["firstLogin"] / 1000 # transforms to standard (non miliseconds) UNIX time
+            first_login_formatted = datetime.datetime.fromtimestamp(first_login).strftime("%m/%Y")
+        except Exception as e:
+            print(f"something went wrong with first login date: {e}")
+        try:
+            player_rank = json_player_data["player"]["rank"]
+            
+        except:
+            try:
+                player_rank = json_player_data["player"]["newPackageRank"]
+                
+            except KeyError:
+                print("player has no rank")
+                return first_login_formatted, "no rank"
+        try:
+            player_rank_formatted = rank_map[player_rank]
+            print(player_rank_formatted)
+        except KeyError:
+            player_rank_formatted = player_rank
+            print(f"rank not found: {player_rank_formatted}")
+        return first_login_formatted, player_rank_formatted
+        
+        
 
     def get_guild_info(self):
         """
