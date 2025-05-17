@@ -231,11 +231,22 @@ class getMojangAPIData:
     def get_name(self):
         try:
             request = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{self.uuid}")
+
+            request.raise_for_status()
+
             self.username = request.json()["name"]
             print(self.username)
             return self.username
+        
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP error occured: {e}")
+            return None
+        except requests.exceptions.RequestException as e:
+            print(f"Request exception occured: {e}")
+            return None
         except Exception as e:
             print(f"something went wrong while getting name from uuid: {e}")
+            return None
 if __name__ == "__main__":
     user = getMojangAPIData("goskyhigh")
     user.get_data()
