@@ -2,3 +2,4 @@
 .env
 skin/
 __pycache__/
+favorites.json
