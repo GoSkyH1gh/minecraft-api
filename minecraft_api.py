@@ -44,12 +44,14 @@ class getMojangAPIData:
         self.has_cape = None
         self.skin_id = None
         self.cape_id = None
+        self.cape_back = None
+        self.cape_showcase = None
 
     
     def get_data(self):
         """
         master function, gets uuid if not provided and then calls get_skin_data
-        returns case-sensitive username, uuid, has_cape(bool), skin_id, cape_id
+        returns case-sensitive username, uuid, has_cape(bool), skin_id, cape_id, cape_showcase(PIL), cape_back(PIL)
         """
         lookup_failed = False
         if not self.uuid:
@@ -63,7 +65,7 @@ class getMojangAPIData:
         
         if self.skin_url is not None: # only tries to get skin and cape data if they exist
             self.get_skin_images()
-        return self.username, self.uuid, self.has_cape, self.skin_id, self.cape_id, lookup_failed
+        return self.username, self.uuid, self.has_cape, self.skin_id, self.cape_id, lookup_failed, self.cape_showcase, self.cape_back
         
         
     def get_uuid(self):
@@ -175,14 +177,14 @@ class getMojangAPIData:
 
             try:
                 crop_area = (12, 1, 22, 17)
-                cape_back = full_cape_image.crop(crop_area)
+                self.cape_back = full_cape_image.crop(crop_area)
             except Exception as e:
                 print(f"something went wrong while cropping back of cape: {e}")
 
             self.store_img(self.cape_showcase, "cape", "showcase")
             self.store_img(full_cape_image, "cape", "full")
-            self.store_img(cape_back, "cape", "back")
-
+            self.store_img(self.cape_back, "cape", "back")
+            
         else:
             print(f"no cape for user {self.username}")
 

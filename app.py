@@ -1,8 +1,14 @@
 from minecraft_api import getMojangAPIData
 from hypixel_api import getHypixelData
+from cape_animator import capeAnimator
 import flet as ft
 import os
 from dotenv import load_dotenv
+from PIL import Image
+import time
+import threading
+import io
+import base64
 
 # contains flet ui and calls other modules
 
@@ -10,6 +16,24 @@ load_dotenv()
 
 cape_id = ""
 uuid = ""
+cape_showcase = None
+cape_back = None
+
+def pillow_to_b64(pil_image, img_format = "PNG"):
+    buffered = io.BytesIO()
+    pil_image.save(buffered, format = img_format)
+    img_bytes_array = buffered.getvalue()
+    base64_encoded_bytes = base64.b64encode(img_bytes_array)
+    base64_encoded_string = base64_encoded_bytes.decode("utf-8")
+    return base64_encoded_string    
+
+def cape_animation_in_thread(page_obj, cape_img_control):
+    animator = capeAnimator(Image.open(os.path.join(os.path.dirname(__file__), "cape", f"{cape_id}.png")))
+    while animator.get_revealed_pixels() < 160:
+        cape_img_control.src_base64 = animator.animate()
+        page_obj.update()
+        time.sleep(0.04)
+
 
 def main(page: ft.Page):
     page.title = "FakeMC"
@@ -18,8 +42,6 @@ def main(page: ft.Page):
         data_entered = username_entry.value.strip()
         update_contents(data_entered)
         
-        
-    
     def create_cape_showcase(file):
         cape_item = ft.Image(
                 src = os.path.join(os.path.dirname(__file__), "cape", file),
@@ -37,17 +59,19 @@ def main(page: ft.Page):
     def cape_hover(e):
         if e.data == "true":
             if has_cape:
-                cape_showcase_img.src = os.path.join(os.path.dirname(__file__), "cape", f"back_{cape_id}.png")
+                cape_showcase_img.src_base64 = pillow_to_b64(cape_back)
                 page.update()
         else:
             if has_cape:
-                cape_showcase_img.src = os.path.join(os.path.dirname(__file__), "cape", f"{cape_id}.png")        
+                cape_showcase_img.src_base64 = pillow_to_b64(cape_showcase)        
                 page.update()
     
     def update_contents(data_entered, reload_needed = True):
         global cape_id
         global uuid
         global has_cape
+        global cape_showcase
+        global cape_back
 
         skin_showcase_img.scale = 0.3
         page.update()
@@ -56,7 +80,7 @@ def main(page: ft.Page):
             user = getMojangAPIData(data_entered)
         else:
             user = getMojangAPIData(None, data_entered)
-        formated_username, uuid, has_cape, skin_id, cape_id, lookup_failed = user.get_data()
+        formated_username, uuid, has_cape, skin_id, cape_id, lookup_failed, cape_showcase, cape_back = user.get_data()
         
         if lookup_failed:
             formated_username_text.value = "Lookup failed"
@@ -64,19 +88,28 @@ def main(page: ft.Page):
             skin_showcase_img.src = "None.png"
             cape_showcase_img.src = "None.png"
             cape_name.value = ""
-            guild_showcase_col.controls.clear()
+            guild_list_view.controls.clear()
         else:
             formated_username_text.value = formated_username
             uuid_text.value = f"uuid: {uuid}"
 
             skin_showcase_img.src = os.path.join(os.path.dirname(__file__), "skin", f"{skin_id}.png")
             if has_cape:
-                cape_showcase_img.src = os.path.join(os.path.dirname(__file__), "cape", f"{cape_id}.png")
+                animation_thread = threading.Thread(
+                    target=cape_animation_in_thread,
+                    args = (
+                        page,
+                        cape_showcase_img
+                    ),
+                )
+                animation_thread.daemon = True
+                animation_thread.start()
+
                 cape_name.value = cape_id
             else:
-                cape_showcase_img.src = os.path.join(os.path.dirname(__file__), "cape", "no_cape.png")
+                cape_showcase_img.src_base64 = pillow_to_b64(Image.open(os.path.join(os.path.dirname(__file__), "cape", "no_cape.png")))
                 cape_name.value = ""
-
+        
         skin_showcase_img.scale = 1 # animates skin showcase img
 
         # --- Hypixel api integration ---
@@ -108,8 +141,7 @@ def main(page: ft.Page):
                     if guild_member_name is not None:
                         guild_list_view.controls.append(ft.Button(text = guild_member_name, on_click = lambda e, name_to_pass = guild_member_name: update_contents(name_to_pass, False)))
                         page.update()
-                        
-
+    
     # --- tab 1 (home) ---
     
     username_entry = ft.TextField(border_color = "#EECCDD", on_submit = get_data_from_button, hint_text="Search by username or UUID")
@@ -125,7 +157,7 @@ def main(page: ft.Page):
     info_c = ft.Container(content = info, padding = ft.padding.only(120, 10))
     
     skin_showcase_img = ft.Image(
-        src="None.png", height = 200, fit = ft.ImageFit.FILL, filter_quality = ft.FilterQuality.NONE, scale = 0.3, animate_scale=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT)
+        src="None.png", height = 200, fit = ft.ImageFit.FILL, filter_quality = ft.FilterQuality.NONE, scale = 0.3, animate_scale=ft.Animation(400, ft.AnimationCurve.EASE_IN_OUT)
         )
     cape_showcase_img = ft.Image(src="None.png", height = 150, fit = ft.ImageFit.FILL, filter_quality = ft.FilterQuality.NONE)
 
@@ -198,3 +230,4 @@ def main(page: ft.Page):
     page.update()
 
 ft.app(main)
+
