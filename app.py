@@ -96,17 +96,17 @@ def main(page: ft.Page):
         print(guild_members)
 
         if guild_members == None:
-            guild_showcase_col.controls.clear()
+            guild_list_view.controls.clear()
             page.update()
 
         if reload_needed:
-            guild_showcase_col.controls.clear()
+            guild_list_view.controls.clear()
             if guild_members is not None:
                 for member in guild_members:
                     guild_showcase = getMojangAPIData(None, member)
                     guild_member_name = guild_showcase.get_name()
                     if guild_member_name is not None:
-                        guild_showcase_col.controls.append(ft.Button(text = guild_member_name, on_click = lambda e, name_to_pass = guild_member_name: update_contents(name_to_pass, False)))
+                        guild_list_view.controls.append(ft.Button(text = guild_member_name, on_click = lambda e, name_to_pass = guild_member_name: update_contents(name_to_pass, False)))
                         page.update()
                         
 
@@ -137,20 +137,26 @@ def main(page: ft.Page):
     player_rank_text = ft.Text(value = "")
 
     hypixel_info_card = ft.Card(content=ft.Container(
-        ft.Column(controls= [first_login_text, player_rank_text]),
-        padding = ft.padding.all(20)
-        )
+        content = ft.Column(
+            controls= [first_login_text, player_rank_text]
+            ),
+        padding = ft.padding.all(20),
+        alignment=ft.alignment.top_center
+        ),
+        elevation = 1,
+        margin = ft.padding.only(right = 60)
+        
     )
     
-    guild_showcase_col = ft.Column(controls = [])
-    guild_showcase_col_c = ft.Container(content=guild_showcase_col, padding = ft.Padding(40, 0, 60, 0))
+    guild_list_view = ft.ListView(spacing = 10, width = 200, height = 450, auto_scroll = True,)
+    guild_list_view_c = ft.Container(content = guild_list_view, margin = ft.margin.only(bottom = 50, right = 30))
 
-    img_displays = ft.Row(controls = [skin_showcase_img, cape_showcase_img_c, cape_name])
+    img_displays = ft.Row(controls = [skin_showcase_img, cape_showcase_img_c, cape_name], alignment=ft.alignment.top_center)
     img_displays_c = ft.Container(padding = ft.padding.only(150, 10), content = img_displays)
 
-    hypixel_display = ft.Row(controls = [hypixel_info_card, guild_showcase_col_c])
+    hypixel_display = ft.Row(controls = [hypixel_info_card, guild_list_view_c], vertical_alignment=ft.CrossAxisAlignment.START)
 
-    main_info = ft.Row(controls=[img_displays_c, hypixel_display], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+    main_info = ft.Row(controls=[img_displays_c, hypixel_display], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.START)
 
     main_page = ft.Column(controls = [search_c, info_c, main_info])
 

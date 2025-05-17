@@ -96,18 +96,22 @@ class getHypixelData:
             members = guild_response.json()["guild"]["members"]
             guild_members = []
             for index, member in enumerate(members):
-                if index < 10: # gets the first x members of the guild
+                if index < 15: # gets the first x members of the guild
                     guild_members.append(member["uuid"])
 
             return guild_members
         except requests.exceptions.HTTPError as e:
             print(f"HTTP error occured: {e}")
+            return None
         except requests.exceptions.RequestException as e:
             print(f"Request exception occured: {e}")
+            return None
         except KeyError as e:
             print(f"coudn't find {e}")
+            return None
         except Exception as e:
             print(f"something went wrong while getting hypixel guild info: {e}")
+            return None
 
 
 if __name__ == "__main__":
