@@ -13,6 +13,8 @@ rank_map = {
     "YOUTUBER": "YouTube"
 }
 
+MAX_GUILD_MEMBERS_TO_FETCH = 15
+
 
 class getHypixelData:
     def __init__(self, uuid, hypixel_api_key):
@@ -109,7 +111,7 @@ class getHypixelData:
             members = guild_response.json()["guild"]["members"]
             guild_members = []
             for index, member in enumerate(members):
-                if index < 15: # gets the first x members of the guild
+                if index < MAX_GUILD_MEMBERS_TO_FETCH: # gets the first x members of the guild
                     guild_members.append(member["uuid"])
 
             return guild_members
