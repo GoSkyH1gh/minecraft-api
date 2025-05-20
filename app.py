@@ -83,47 +83,23 @@ def main(page: ft.Page):
         skin_showcase_img.scale = 0.3
         page.update()
 
-        if len(data_entered) <= 16: # if text inputed is less than 16 chars (max username length) search is treated as an uuid
+        if len(data_entered) <= 16: # if text inputed is less than 16 chars (max username length) search is treated as an name
             user = getMojangAPIData(data_entered)
         else:
             user = getMojangAPIData(None, data_entered)
         formated_username, uuid, has_cape, skin_id, cape_id, lookup_failed, cape_showcase, cape_back = user.get_data()
         
-        if lookup_failed:
-            formated_username_text.value = "Lookup failed"
-            uuid_text.value = ""
-            skin_showcase_img.src = "None.png"
-            cape_showcase_img.src_base64 = ""
-            cape_name.value = ""
-            guild_list_view.controls.clear()
-            hypixel_info_card.visible = False
-            home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
-        else:
+        if lookup_failed: # if lookup fails resets all controls
+            reset_controls()
+        else: # this happens if lookup is succesful
             formated_username_text.value = formated_username
             uuid_text.value = f"uuid: {uuid}"
 
+            # loads skin, handles cape animation and gradient color
             skin_showcase_img.src = os.path.join(os.path.dirname(__file__), "skin", f"{skin_id}.png")
             if has_cape:
-                animation_thread = threading.Thread(
-                    target=cape_animation_in_thread,
-                    args = (
-                        page,
-                        cape_showcase_img
-                    ),
-                )
-                animation_thread.daemon = True
-                animation_thread.start()
-
-                bgcolor_instance = capeAnimator(cape_showcase)
-                bgcolor = bgcolor_instance.get_average_color_pil()
-                if bgcolor is not None:
-                    home_page_container.gradient = ft.RadialGradient(colors = [bgcolor, ft.Colors.TRANSPARENT], center = ft.Alignment(-0.35, 0), radius = 0.7)
-                    print(bgcolor)
-                    page.update()
-                else:
-                    home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
-                    print("no cape color found")
-                    page.update()
+                animate_cape()
+                update_gradient()
 
                 cape_name.value = cape_id
             else:
@@ -131,7 +107,6 @@ def main(page: ft.Page):
                 cape_name.value = ""
                 home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
                 page.update()
-
 
         skin_showcase_img.scale = 1 # animates skin showcase img
 
@@ -149,7 +124,41 @@ def main(page: ft.Page):
             favorite_chip.visible = False
         page.update()
 
+        load_hypixel_data(lookup_failed, reload_needed)
 
+    def animate_cape():
+        animation_thread = threading.Thread(
+            target = cape_animation_in_thread,
+                args = (
+                    page,
+                    cape_showcase_img
+            ),
+        )
+        animation_thread.daemon = True
+        animation_thread.start()
+
+    def reset_controls():
+        formated_username_text.value = "Lookup failed"
+        uuid_text.value = ""
+        skin_showcase_img.src = "None.png"
+        cape_showcase_img.src_base64 = ""
+        cape_name.value = ""
+        guild_list_view.controls.clear()
+        hypixel_info_card.visible = False
+        home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
+
+    def update_gradient():
+        bgcolor_instance = capeAnimator(cape_showcase)
+        bgcolor = bgcolor_instance.get_average_color_pil()
+        if bgcolor is not None:
+            home_page_container.gradient = ft.RadialGradient(colors = [bgcolor, ft.Colors.TRANSPARENT], center = ft.Alignment(-0.35, 0), radius = 0.7) # handle gradient color
+            print(bgcolor)
+        else:
+            home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
+            print("no cape color found")
+        page.update()
+
+    def load_hypixel_data(lookup_failed, reload_needed):
         # --- Hypixel api integration ---
         if not lookup_failed:
             api_key = os.getenv("hypixel_api_key")
@@ -186,6 +195,8 @@ def main(page: ft.Page):
                     if guild_member_name is not None:
                         guild_list_view.controls.append(ft.Button(text = guild_member_name, on_click = lambda e, name_to_pass = guild_member_name: update_contents(name_to_pass, False)))
                         page.update()
+
+
 
     def favorites_clicked(e):
         # get data from favorites.json
