@@ -67,7 +67,7 @@ def main(page: ft.Page):
             if has_cape:
                 cape_showcase_img.src_base64 = pillow_to_b64(cape_showcase)        
                 cape_showcase_img.update()
-    
+
     def update_contents(data_entered, reload_needed = True):
         global cape_id
         global uuid
@@ -75,6 +75,10 @@ def main(page: ft.Page):
         global cape_showcase
         global cape_back
         global formated_username
+        
+        tabs.selected_index = 0
+
+        print(data_entered)
 
         skin_showcase_img.scale = 0.3
         page.update()
@@ -93,6 +97,7 @@ def main(page: ft.Page):
             cape_name.value = ""
             guild_list_view.controls.clear()
             hypixel_info_card.visible = False
+            home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
         else:
             formated_username_text.value = formated_username
             uuid_text.value = f"uuid: {uuid}"
@@ -109,10 +114,24 @@ def main(page: ft.Page):
                 animation_thread.daemon = True
                 animation_thread.start()
 
+                bgcolor_instance = capeAnimator(cape_showcase)
+                bgcolor = bgcolor_instance.get_average_color_pil()
+                if bgcolor is not None:
+                    home_page_container.gradient = ft.RadialGradient(colors = [bgcolor, ft.Colors.TRANSPARENT], center = ft.Alignment(-0.35, 0), radius = 0.7)
+                    print(bgcolor)
+                    page.update()
+                else:
+                    home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
+                    print("no cape color found")
+                    page.update()
+
                 cape_name.value = cape_id
             else:
                 cape_showcase_img.src_base64 = pillow_to_b64(Image.open(os.path.join(os.path.dirname(__file__), "cape", "no_cape.png")))
                 cape_name.value = ""
+                home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
+                page.update()
+
 
         skin_showcase_img.scale = 1 # animates skin showcase img
 
@@ -122,8 +141,10 @@ def main(page: ft.Page):
             favorite_chip.visible = True
             if {"name": formated_username, "uuid": uuid} in favorites:
                 favorite_chip.icon = ft.Icons.FAVORITE_SHARP
+                favorite_chip.tooltip = "Unfavorite"
             else:
                 favorite_chip.icon = ft.Icons.FAVORITE_OUTLINE
+                favorite_chip.tooltip = "Favorite"
         else:
             favorite_chip.visible = False
         page.update()
@@ -142,6 +163,7 @@ def main(page: ft.Page):
             else:
                 first_login_text.value = ""
                 player_rank_text.value = ""
+                hypixel_info_card.visible = False
                 page.update()
             guild_members = []
             guild_members = user1.get_guild_info()
@@ -175,19 +197,23 @@ def main(page: ft.Page):
             favorites.append(new_favorite)
             print(f"you added {formated_username} to favorites!\nuuid: {uuid}")
             favorite_chip.icon = ft.Icons.FAVORITE_SHARP
+            favorite_chip.tooltip = "Unfavorite"
             favorite_chip.update()
         else:
             favorites.remove(new_favorite)
             print(f"you removed {formated_username} from favorites")
             favorite_chip.icon = ft.Icons.FAVORITE_OUTLINE
+            favorite_chip.tooltip = "Favorite"
             favorite_chip.update()
 
+        
         # write new favorites.json
         try:
             with open(favorites_location, "w", encoding = "utf-8") as file:
                 json.dump(favorites, file, indent = 4)
         except Exception as e:
             print(f"Something went wrong while saving favorites: {e}")
+        load_favorites_page()
     
     def load_favorites():
         try:
@@ -197,10 +223,20 @@ def main(page: ft.Page):
         except Exception as e:
             print(f"Something went while reading favorites.json: {e}")
             return []
+    
+    def load_favorites_page():
+        favorites_listview.controls.clear()
+        favorites = load_favorites()
+        for favorite in favorites:
+            favorites_listview.controls.append(
+                ft.Button(text = favorite["name"], on_click = lambda e, uuid = favorite["uuid"]: update_contents(uuid)) # lambda so that function doesnt run on load
+            )
+        tabs.update()
     # --- tab 1 (home) ---
     
+    
     username_entry = ft.TextField(border_color = "#EECCDD", on_submit = get_data_from_button, hint_text="Search by username or UUID")
-    get_data_button = ft.Button(on_click = get_data_from_button, text = "Get Data")
+    get_data_button = ft.Button(on_click = get_data_from_button, text = "Search")
     
     search = ft.Row(controls = [username_entry, get_data_button])
     search_c = ft.Container(padding = ft.padding.only(120, 10), content = search)
@@ -212,6 +248,7 @@ def main(page: ft.Page):
         icon = ft.Icons.FAVORITE_BORDER_OUTLINED,
         icon_color = ft.Colors.RED_400,
         on_click = favorites_clicked,
+        tooltip = "Favorite",
         visible = False
     )
 
@@ -230,6 +267,8 @@ def main(page: ft.Page):
 
     cape_showcase_img_c = ft.Container(content = cape_showcase_img, on_hover=cape_hover)
 
+    #cape_gradient_stack = ft.Stack(controls=[home_page_container, cape_showcase_img_c])
+
     cape_name = ft.Text(value = "")
 
     first_login_text = ft.Text(value = "")
@@ -247,7 +286,7 @@ def main(page: ft.Page):
         visible = False
         
     )
-    
+
     guild_list_view = ft.ListView(spacing = 10, width = 200, height = 450, auto_scroll = True,)
     guild_list_view_c = ft.Container(content = guild_list_view, margin = ft.margin.only(bottom = 50, right = 30))
 
@@ -258,15 +297,28 @@ def main(page: ft.Page):
 
     main_info = ft.Row(controls=[img_displays_c, hypixel_display], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.START)
 
-    main_page = ft.Column(controls = [search_c, info_c, main_info])
+    home_page = ft.Column(controls = [search_c, info_c, main_info])
 
-    home_page = main_page
+    # --- tab 2 (favorites) ---
+    favorites_listview = ft.ListView(spacing = 20)
 
-    # --- tab 2 (cape gallery) ---
+    favorites_tab = ft.Container(content = favorites_listview, margin = 20, padding = 20)
+
+
+    # --- tab 3 (cape gallery) ---
     cape_gallery = ft.GridView(
         spacing = 5,
         expand = True,
         max_extent=150,
+    )
+
+    home_page_container = ft.Container(
+        gradient = ft.RadialGradient(
+            colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT],
+        ),
+        expand = True,
+        visible = True,
+        content = home_page
     )
 
 
@@ -276,26 +328,33 @@ def main(page: ft.Page):
         tabs = [
             ft.Tab(
                 text = "Home",
-                content = ft.Container(
-                    content = home_page
-                ),
+                content = home_page_container,
+            ),
+            ft.Tab(
+                text = "Favorites",
+                content = favorites_tab
             ),
             ft.Tab(
                 text = "Capes",
                 content = ft.Container(
                     content = cape_gallery,
-                    padding = 20
+                    padding = 20,
                 )
             )
-        ]
+        ],
+        expand = True,
     )
 
     page.add(tabs)
+
+    
 
     for file in os.listdir(os.path.join(os.path.dirname(__file__), "cape")):
         if "raw" not in file and "no_cape" not in file and "back" not in file:
             create_cape_showcase(file)
     page.update()
+
+    load_favorites_page()
 
 ft.app(main)
 

@@ -32,7 +32,8 @@ CAPE_MAP = {
     "76b9eb7a8f9f2fe6659c23a2d8b18edf": "Millionth Customer",
     "a4ef76ebde88d27e4d430ac211df681e": "Translator",
     "fb45ea81e785a7854ae8429d7236ca26": "Office",
-    "93199a2ee9e1585cb8d09d6f687cb761": "Mojang (Legacy)"
+    "93199a2ee9e1585cb8d09d6f687cb761": "Mojang (Legacy)",
+    "26b546a54d519e6a3ff01efa01acce81": "Cobalt"
 }
 
 class getMojangAPIData:
