@@ -1,6 +1,5 @@
+from utils import pillow_to_b64
 from PIL import Image
-import base64
-import io
 import numpy as np
 
 class capeAnimator:
@@ -18,15 +17,7 @@ class capeAnimator:
         pixel_region = self.cape_img.crop(crop_area)
         self.animated_pil_image.paste(pixel_region, crop_area)
         self.current_line += 1
-        return self.pillow_to_b64(self.animated_pil_image)
-
-    def pillow_to_b64(self, pil_image, img_format = "PNG"):
-        buffered = io.BytesIO()
-        pil_image.save(buffered, format = img_format)
-        img_bytes_array = buffered.getvalue()
-        base64_encoded_bytes = base64.b64encode(img_bytes_array)
-        base64_encoded_string = base64_encoded_bytes.decode("utf-8")
-        return base64_encoded_string
+        return pillow_to_b64(self.animated_pil_image)
 
     def get_revealed_pixels(self):
         return self.revealed_pixels
