@@ -20,15 +20,12 @@ cape_showcase = None
 cape_back = None
 favorites_location = os.path.join(os.path.dirname(__file__), "favorites.json")
 
-
-
 def cape_animation_in_thread(page_obj, cape_img_control):
     animator = capeAnimator(Image.open(os.path.join(os.path.dirname(__file__), "cape", f"{cape_id}.png")))
     while animator.get_revealed_pixels() < 160:
         cape_img_control.src_base64 = animator.animate()
         page_obj.update()
         time.sleep(0.04)
-
 
 def main(page: ft.Page):
     page.title = "FakeMC"
@@ -103,8 +100,6 @@ def main(page: ft.Page):
                 cape_name.value = ""
                 home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
                 page.update()
-
-        
 
         # checks if user is in favorites
         favorites = load_favorites()
@@ -191,8 +186,6 @@ def main(page: ft.Page):
                     if guild_member_name is not None:
                         guild_list_view.controls.append(ft.Button(text = guild_member_name, on_click = lambda e, name_to_pass = guild_member_name: update_contents(name_to_pass, False)))
                         page.update()
-
-
 
     def favorites_clicked(e):
         # get data from favorites.json
