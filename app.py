@@ -1,14 +1,13 @@
 from minecraft_api import getMojangAPIData
 from hypixel_api import getHypixelData
 from cape_animator import capeAnimator
+from utils import pillow_to_b64
 import flet as ft
 import os
 from dotenv import load_dotenv
 from PIL import Image
 import time
 import threading
-import io
-import base64
 import json
 
 # contains flet ui and calls other modules
@@ -21,13 +20,7 @@ cape_showcase = None
 cape_back = None
 favorites_location = os.path.join(os.path.dirname(__file__), "favorites.json")
 
-def pillow_to_b64(pil_image, img_format = "PNG"):
-    buffered = io.BytesIO()
-    pil_image.save(buffered, format = img_format)
-    img_bytes_array = buffered.getvalue()
-    base64_encoded_bytes = base64.b64encode(img_bytes_array)
-    base64_encoded_string = base64_encoded_bytes.decode("utf-8")
-    return base64_encoded_string    
+
 
 def cape_animation_in_thread(page_obj, cape_img_control):
     animator = capeAnimator(Image.open(os.path.join(os.path.dirname(__file__), "cape", f"{cape_id}.png")))
@@ -92,6 +85,9 @@ def main(page: ft.Page):
         if lookup_failed: # if lookup fails resets all controls
             reset_controls()
         else: # this happens if lookup is succesful
+            skin_showcase_img.scale = 1 # animates skin showcase img
+            page.update()
+            
             formated_username_text.value = formated_username
             uuid_text.value = f"uuid: {uuid}"
 
@@ -108,7 +104,7 @@ def main(page: ft.Page):
                 home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
                 page.update()
 
-        skin_showcase_img.scale = 1 # animates skin showcase img
+        
 
         # checks if user is in favorites
         favorites = load_favorites()
@@ -124,7 +120,7 @@ def main(page: ft.Page):
             favorite_chip.visible = False
         page.update()
 
-        load_hypixel_data(lookup_failed, reload_needed)
+        load_hypixel_data(reload_needed)
 
     def animate_cape():
         animation_thread = threading.Thread(
@@ -158,9 +154,9 @@ def main(page: ft.Page):
             print("no cape color found")
         page.update()
 
-    def load_hypixel_data(lookup_failed, reload_needed):
+    def load_hypixel_data(reload_needed):
         # --- Hypixel api integration ---
-        if not lookup_failed:
+        if uuid is not None:
             api_key = os.getenv("hypixel_api_key")
             user1 = getHypixelData(uuid, api_key)
             first_login, player_rank = user1.get_basic_data()
@@ -296,7 +292,7 @@ def main(page: ft.Page):
         margin = ft.padding.only(right = 60),
         visible = False
         
-    )
+    ) 
 
     guild_list_view = ft.ListView(spacing = 10, width = 200, height = 450, auto_scroll = True,)
     guild_list_view_c = ft.Container(content = guild_list_view, margin = ft.margin.only(bottom = 50, right = 30))
