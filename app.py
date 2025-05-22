@@ -227,7 +227,7 @@ class FakeMCApp:
         favorites = self.load_favorites()
         if not self.lookup_failed:
             self.favorite_chip.visible = True
-            if {"name": self.formated_username, "uuid": self.uuid} in favorites:
+            if {"name": self.formated_username, "uuid": self.uuid, "skin_id": self.skin_id} in favorites:
                 self.favorite_chip.icon = ft.Icons.FAVORITE_SHARP
                 self.favorite_chip.tooltip = "Unfavorite"
             else:
@@ -312,7 +312,7 @@ class FakeMCApp:
         # get data from favorites.json
         favorites = self.load_favorites()
 
-        new_favorite = {"name": self.formated_username, "uuid": self.uuid}
+        new_favorite = {"name": self.formated_username, "uuid": self.uuid, "skin_id": self.skin_id}
 
         if new_favorite not in favorites:
             favorites.append(new_favorite)
@@ -326,7 +326,6 @@ class FakeMCApp:
             self.favorite_chip.icon = ft.Icons.FAVORITE_OUTLINE
             self.favorite_chip.tooltip = "Favorite"
             self.favorite_chip.update()
-
         
         # write new favorites.json
         try:
@@ -350,7 +349,27 @@ class FakeMCApp:
         favorites = self.load_favorites()
         for favorite in favorites:
             self.favorites_listview.controls.append(
-                ft.Button(text = favorite["name"], on_click = lambda e, uuid = favorite["uuid"]: self.update_contents(uuid)) # lambda so that function doesnt run on load
+                ft.Card(
+                    content = ft.Container(
+                        ft.Row(controls = [
+                            ft.Column(
+                            controls = [
+                                ft.Image(src = current_directory / "skin" / f"{favorite["skin_id"]}.png", filter_quality = ft.FilterQuality.NONE, height = 100, fit = ft.ImageFit.FILL),
+                            ]
+                            ),
+                            ft.Column(
+                                controls = [
+                                    ft.Text(value = favorite["name"], size = 16),
+                                    ft.Text(value = favorite["uuid"], size = 12, color = ft.Colors.GREY_700),
+                                    ft.Button(text = "See more", on_click = lambda e, uuid = favorite["uuid"]: self.update_contents(uuid))
+                                ]
+                            )
+                        ]
+                        ),
+                        
+                        padding = ft.padding.all(20),
+                    )
+                )
             )
         self.tabs.update()
 
