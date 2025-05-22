@@ -72,7 +72,7 @@ class getMojangAPIData:
         return self.username, self.uuid, self.has_cape, self.skin_id, self.cape_id, lookup_failed, self.cape_showcase, self.cape_back
         
         
-    def get_uuid(self):
+    def get_uuid(self) -> bool:
         """
         recieves uuid based on username
         """
@@ -89,7 +89,7 @@ class getMojangAPIData:
             logger.error(f"something went wrong in get_uuid: {e}")
             return False
     
-    def get_skin_data(self):
+    def get_skin_data(self) -> None:
         """
         This function recieves data about the skin and cape, requires UUID
         structure is here because it's confusing: https://minecraft.wiki/w/Mojang_API#Query_player's_skin_and_cape
@@ -127,7 +127,7 @@ class getMojangAPIData:
         except Exception as e:
             logger.error(f"something went wrong in get_skin_data: {e}")
 
-    def get_skin_images(self):
+    def get_skin_images(self) -> None:
         """
         This downloads the images from skin url and optionally cape url(if it exists)
         then saves them locally 
@@ -192,7 +192,7 @@ class getMojangAPIData:
         else:
             logger.info(f"no cape for user {self.username}")
 
-    def store_img(self, image, type, format):
+    def store_img(self, image, type, format) -> None:
         """
         stores an image
         type -> skin / cape
