@@ -94,6 +94,7 @@ class getHypixelData:
         """
         requires uuid and api key
         returns a list with a specified number of guild members
+        return None if it fails
         """
         try:
             payload = {"player": self.uuid}
