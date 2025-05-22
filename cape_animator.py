@@ -1,6 +1,9 @@
 from utils import pillow_to_b64
 from PIL import Image
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 class capeAnimator:
     def __init__(self, cape_img):
@@ -33,10 +36,10 @@ class capeAnimator:
             g = int(average_color_tuple[1])
             b = int(average_color_tuple[2])
             rgb = f"#{r:02x}{g:02x}{b:02x}"
-            print(rgb)
+            logging.info(f"average color of cape: {rgb}")
             return rgb
         except Exception as e:
-            print(f"something went wrong while getting color values: {e}")
+            logging.error(f"something went wrong while getting color values: {e}")
             return None
 
 

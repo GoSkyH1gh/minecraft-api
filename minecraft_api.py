@@ -4,6 +4,9 @@ import base64
 import io
 from PIL import Image
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # the last 32 characters of the cape url recieved from mojang with a corresponding name
 CAPE_MAP = {
@@ -56,7 +59,7 @@ class getMojangAPIData:
         """
         lookup_failed = False
         if not self.uuid:
-            print(f"no uuid found, calling API for {self.username}")
+            logger.info(f"no uuid found, calling API for {self.username}")
             if self.get_uuid():
                 self.get_skin_data() # only tries get_skin_data if request suceeds
             else:
@@ -75,15 +78,15 @@ class getMojangAPIData:
         """
         try:
             request = requests.get(f"https://api.minecraftservices.com/minecraft/profile/lookup/name/{self.username}")
-            print("request success for getting UUID!")
+            logger.info("request success for getting UUID!")
             json_request = json.loads(request.text)
-            print(json_request)
+            logger.debug(json_request)
             self.uuid = json_request["id"]
             self.username = json_request["name"]
             return True
             
         except Exception as e:
-            print(f"something went wrong in get_uuid: {e}")
+            logger.error(f"something went wrong in get_uuid: {e}")
             return False
     
     def get_skin_data(self):
@@ -97,7 +100,7 @@ class getMojangAPIData:
         try:
             request = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{self.uuid}")
             json_request = json.loads(request.text)
-            print("request success for getting skin and cape data!")
+            logger.info("request success for getting skin and cape data!")
 
             # gets a list which contains a dictionary
             self.username = json_request["name"]
@@ -108,21 +111,21 @@ class getMojangAPIData:
             
             # now that we have the decoded string, we can finally get the urls
             properties_json = json.loads(decoded_base64_string)
-            print(f"skin link: {properties_json["textures"]["SKIN"]["url"]}")
+            logger.info(f"skin link: {properties_json["textures"]["SKIN"]["url"]}")
             
             self.skin_url = properties_json["textures"]["SKIN"]["url"]
             
             try:
-                print(f"cape link: {properties_json["textures"]["CAPE"]["url"]}")
+                logger.info(f"cape link: {properties_json["textures"]["CAPE"]["url"]}")
                 self.cape_url = properties_json["textures"]["CAPE"]["url"]
                 self.has_cape = True
 
             except:
                 self.has_cape = False
-                print(f"User {self.username} has no equipped cape")
+                logger.info(f"User {self.username} has no equipped cape")
 
         except Exception as e:
-            print(f"something went wrong in get_skin_data: {e}")
+            logger.error(f"something went wrong in get_skin_data: {e}")
 
     def get_skin_images(self):
         """
@@ -134,7 +137,7 @@ class getMojangAPIData:
             skin_bytes = io.BytesIO(response_skin.content)
 
             full_skin_image = Image.open(skin_bytes)
-            print("skin image opened successfully")
+            logger.debug("skin image opened successfully")
 
             try: # we overlap base face with outer layer here
                 crop_area = (8, 8, 16, 16)
@@ -150,12 +153,12 @@ class getMojangAPIData:
                 self.store_img(self.skin_showcase, "skin", "showcase")
                 
             except Exception as e:
-                print(f"something went wrong while cropping skin image: {e}")
+                logger.error(f"something went wrong while cropping skin image: {e}")
 
             
 
         except Exception as e:
-            print(f"something went wrong in get_skin_images: {e}")
+            logger.error(f"something went wrong in get_skin_images: {e}")
         
 
         # cape section
@@ -165,29 +168,29 @@ class getMojangAPIData:
                 cape_bytes = io.BytesIO(response_cape.content)
 
                 full_cape_image = Image.open(cape_bytes) # uncropped cape image
-                print("cape image opened successfully")
+                logger.info("cape image opened successfully")
             except Exception as e:
-                print(f"something went wrong while fetching cape image: {e}")
+                logger.error(f"something went wrong while fetching cape image: {e}")
 
             try:
                 crop_area = (1, 1, 11, 17)
                 self.cape_showcase = full_cape_image.crop(crop_area)
 
             except Exception as e:
-                print(f"something went wrong while cropping cape image: {e}") 
+                logger.error(f"something went wrong while cropping cape image: {e}") 
 
             try:
                 crop_area = (12, 1, 22, 17)
                 self.cape_back = full_cape_image.crop(crop_area)
             except Exception as e:
-                print(f"something went wrong while cropping back of cape: {e}")
+                logger.error(f"something went wrong while cropping back of cape: {e}")
 
             self.store_img(self.cape_showcase, "cape", "showcase")
             self.store_img(full_cape_image, "cape", "full")
             self.store_img(self.cape_back, "cape", "back")
             
         else:
-            print(f"no cape for user {self.username}")
+            logger.info(f"no cape for user {self.username}")
 
     def store_img(self, image, type, format):
         """
@@ -208,11 +211,11 @@ class getMojangAPIData:
             if type == "cape":
                 raw_cape_data = self.cape_url[-32:]
                 try:
-                    print(f"trying to access {raw_cape_data}")
+                    logger.info(f"trying to access {raw_cape_data}")
                     self.cape_id = CAPE_MAP[raw_cape_data]
-                    print(f"Identified {self.cape_id} cape!")
+                    logger.info(f"Identified {self.cape_id} cape!")
                 except:
-                    print("Cape not regonized")
+                    logger.warning("Cape not regonized")
                     self.cape_id = raw_cape_data
                 filename += f"{self.cape_id}.png"
 
@@ -225,11 +228,11 @@ class getMojangAPIData:
 
             os.makedirs(subfolder_filepath, exist_ok=True)
             image.save(filepath) # save once with unique id
-            print(f"image stored at {filepath}")
+            logger.info(f"image stored at {filepath}")
             
             
         except Exception as e: 
-            print(f"something went wrong in store_img: {e}")
+            logger.error(f"something went wrong in store_img: {e}")
 
     def get_name(self):
         try:
@@ -238,18 +241,19 @@ class getMojangAPIData:
             request.raise_for_status()
 
             self.username = request.json()["name"]
-            print(self.username)
+            logger.debug(self.username)
             return self.username
         
         except requests.exceptions.HTTPError as e:
-            print(f"HTTP error occured: {e}")
+            logger.error(f"HTTP error occured: {e}")
             return None
         except requests.exceptions.RequestException as e:
-            print(f"Request exception occured: {e}")
+            logger.error(f"Request exception occured: {e}")
             return None
         except Exception as e:
-            print(f"something went wrong while getting name from uuid: {e}")
+            logger.error(f"something went wrong while getting name from uuid: {e}")
             return None
+        
 if __name__ == "__main__":
     user = getMojangAPIData("goskyhigh")
     user.get_data()
