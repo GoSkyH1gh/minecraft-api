@@ -41,6 +41,8 @@ class FakeMCApp:
         self.uuid = ""
         self.cape_showcase = None
         self.cape_back = None
+        self.has_cape = None
+        self.skin_id = None
         self.favorites_location = current_directory / "favorites.json"
 
         self.username_entry = ft.TextField(border_color = "#EECCDD", on_submit = self.get_data_from_button, hint_text="Search by username or UUID")
