@@ -9,19 +9,37 @@ from PIL import Image
 import time
 import threading
 import json
+from pathlib import Path
+import logging
+
+current_file_path = Path(__file__)
+current_directory = current_file_path.parent
+
+app_logger = logging.getLogger(__name__)
+
+logging.basicConfig(
+    level = logging.INFO,
+    handlers = [
+        logging.StreamHandler(),
+        logging.FileHandler(current_directory / "latest.log")
+    ]
+    )
 
 # contains flet ui and calls other modules
 
 load_dotenv()
 
+app_logger.info(f"running in: {current_file_path}")
+
+
 cape_id = ""
 uuid = ""
 cape_showcase = None
 cape_back = None
-favorites_location = os.path.join(os.path.dirname(__file__), "favorites.json")
+favorites_location = current_directory / "favorites.json"
 
 def cape_animation_in_thread(page_obj, cape_img_control):
-    animator = capeAnimator(Image.open(os.path.join(os.path.dirname(__file__), "cape", f"{cape_id}.png")))
+    animator = capeAnimator(Image.open(current_directory / "cape" / f"{cape_id}.png"))
     while animator.get_revealed_pixels() < 160:
         cape_img_control.src_base64 = animator.animate()
         page_obj.update()
@@ -36,7 +54,7 @@ def main(page: ft.Page):
         
     def create_cape_showcase(file):
         cape_item = ft.Image(
-                src = os.path.join(os.path.dirname(__file__), "cape", file),
+                src = current_directory / "cape" / file,
                 fit = ft.ImageFit.FIT_HEIGHT,
                 filter_quality = ft.FilterQuality.NONE,
                 height = 80,
@@ -68,7 +86,7 @@ def main(page: ft.Page):
         
         tabs.selected_index = 0
 
-        print(data_entered)
+        app_logger.info(f"data entered: {data_entered}")
 
         skin_showcase_img.scale = 0.3
         page.update()
@@ -89,14 +107,14 @@ def main(page: ft.Page):
             uuid_text.value = f"uuid: {uuid}"
 
             # loads skin, handles cape animation and gradient color
-            skin_showcase_img.src = os.path.join(os.path.dirname(__file__), "skin", f"{skin_id}.png")
+            skin_showcase_img.src = current_directory / "skin" / f"{skin_id}.png"
             if has_cape:
                 animate_cape()
                 update_gradient()
 
                 cape_name.value = cape_id
             else:
-                cape_showcase_img.src_base64 = pillow_to_b64(Image.open(os.path.join(os.path.dirname(__file__), "cape", "no_cape.png")))
+                cape_showcase_img.src_base64 = pillow_to_b64(Image.open(current_directory / "cape" / "no_cape.png"))
                 cape_name.value = ""
                 home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
                 page.update()
@@ -143,10 +161,9 @@ def main(page: ft.Page):
         bgcolor = bgcolor_instance.get_average_color_pil()
         if bgcolor is not None:
             home_page_container.gradient = ft.RadialGradient(colors = [bgcolor, ft.Colors.TRANSPARENT], center = ft.Alignment(-0.35, 0), radius = 0.7) # handle gradient color
-            print(bgcolor)
         else:
             home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
-            print("no cape color found")
+            app_logger.warning("Cape color not found")
         page.update()
 
     def load_hypixel_data(reload_needed):
@@ -167,7 +184,7 @@ def main(page: ft.Page):
                 page.update()
             guild_members = []
             guild_members = user1.get_guild_info()
-            print(guild_members)
+            app_logger.debug(guild_members)
         else:
             guild_list_view.controls.clear()
             page.update()
@@ -195,13 +212,13 @@ def main(page: ft.Page):
 
         if new_favorite not in favorites:
             favorites.append(new_favorite)
-            print(f"you added {formated_username} to favorites!\nuuid: {uuid}")
+            app_logger.info(f"you added {formated_username} to favorites!\nuuid: {uuid}")
             favorite_chip.icon = ft.Icons.FAVORITE_SHARP
             favorite_chip.tooltip = "Unfavorite"
             favorite_chip.update()
         else:
             favorites.remove(new_favorite)
-            print(f"you removed {formated_username} from favorites")
+            app_logger.info(f"you removed {formated_username} from favorites")
             favorite_chip.icon = ft.Icons.FAVORITE_OUTLINE
             favorite_chip.tooltip = "Favorite"
             favorite_chip.update()
@@ -210,9 +227,9 @@ def main(page: ft.Page):
         # write new favorites.json
         try:
             with open(favorites_location, "w", encoding = "utf-8") as file:
-                json.dump(favorites, file, indent = 4)
+                json.dump(favorites, file, indent = 4)   
         except Exception as e:
-            print(f"Something went wrong while saving favorites: {e}")
+            app_logger.error(f"Something went wrong while saving favorites: {e}")
         load_favorites_page()
     
     def load_favorites():
@@ -221,7 +238,7 @@ def main(page: ft.Page):
                 return json.load(file)
             
         except Exception as e:
-            print(f"Something went while reading favorites.json: {e}")
+            app_logger.error(f"Something went while reading favorites.json: {e}")
             return []
     
     def load_favorites_page():
@@ -349,7 +366,7 @@ def main(page: ft.Page):
 
     
 
-    for file in os.listdir(os.path.join(os.path.dirname(__file__), "cape")):
+    for file in os.listdir(current_directory / "cape"):
         if "raw" not in file and "no_cape" not in file and "back" not in file:
             create_cape_showcase(file)
     page.update()
