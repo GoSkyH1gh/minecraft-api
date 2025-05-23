@@ -45,6 +45,7 @@ class FakeMCApp:
         self.skin_id = None
         self.favorites_location = current_directory / "favorites.json"
 
+        # flet ui starts here
         self.username_entry = ft.TextField(border_color = "#EECCDD", on_submit = self.get_data_from_button, hint_text="Search by username or UUID")
         self.get_data_button = ft.Button(on_click = self.get_data_from_button, text = "Search")
         
@@ -119,6 +120,7 @@ class FakeMCApp:
             max_extent=150,
         )
 
+        # logic for gradient
         self.home_page_container = ft.Container(
             gradient = ft.RadialGradient(
                 colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT],
@@ -128,6 +130,7 @@ class FakeMCApp:
             content = self.home_page
         )
 
+        # logic for tabs
         self.tabs = ft.Tabs(
             selected_index = 0,
             animation_duration = 300,
@@ -328,11 +331,7 @@ class FakeMCApp:
             self.favorite_chip.update()
         
         # write new favorites.json
-        try:
-            with open(self.favorites_location, "w", encoding = "utf-8") as file:
-                json.dump(favorites, file, indent = 4)   
-        except Exception as e:
-            app_logger.error(f"Something went wrong while saving favorites: {e}")
+        self.save_favorites(favorites)
         self.load_favorites_page()
     
     def load_favorites(self) -> list:
@@ -344,33 +343,59 @@ class FakeMCApp:
             app_logger.error(f"Something went while reading favorites.json: {e}")
             return []
     
+    def delete_favorite(self, uuid_to_delete) -> None:
+        """Delets a favorite, by uuid"""
+        favorites = self.load_favorites()
+        for favorite in favorites:
+            if favorite["uuid"] == uuid_to_delete:
+                app_logger.warning(f"favorite {favorite["name"]} has been removed")
+                favorites.remove(favorite)
+                break
+        self.save_favorites(favorites)
+        self.load_favorites_page() # reload favorites
+        self.page.update()
+
+    def save_favorites(self, favorites) -> None:
+        try:
+            with open(self.favorites_location, "w", encoding = "utf-8") as file:
+                json.dump(favorites, file, indent = 4)   
+        except Exception as e:
+            app_logger.error(f"Something went wrong while saving favorites: {e}")
+
     def load_favorites_page(self) -> None:
         self.favorites_listview.controls.clear()
         favorites = self.load_favorites()
-        for favorite in favorites:
-            self.favorites_listview.controls.append(
-                ft.Card(
-                    content = ft.Container(
-                        ft.Row(controls = [
-                            ft.Column(
-                            controls = [
-                                ft.Image(src = current_directory / "skin" / f"{favorite["skin_id"]}.png", filter_quality = ft.FilterQuality.NONE, height = 100, fit = ft.ImageFit.FILL),
+        try:
+            for favorite in favorites:
+                self.favorites_listview.controls.append(
+                    ft.Card(
+                        content = ft.Container(
+                            ft.Row(controls = [
+                                ft.Column(
+                                controls = [
+                                    ft.Image(src = current_directory / "skin" / f"{favorite["skin_id"]}.png", filter_quality = ft.FilterQuality.NONE, height = 100, fit = ft.ImageFit.FILL),
+                                ]
+                                ),
+                                ft.Column(
+                                    controls = [
+                                        ft.Text(value = favorite["name"], size = 16),
+                                        ft.Text(value = favorite["uuid"], size = 12, color = ft.Colors.GREY_700),
+                                        ft.Row(controls = [
+                                            ft.Button(text = "See more", on_click = lambda e, uuid = favorite["uuid"]: self.update_contents(uuid)),
+                                            ft.Button(text = "Remove", on_click = lambda e, uuid = favorite["uuid"]: self.delete_favorite(uuid))
+                                            ]
+                                        )
+                                    ]
+                                )
                             ]
                             ),
-                            ft.Column(
-                                controls = [
-                                    ft.Text(value = favorite["name"], size = 16),
-                                    ft.Text(value = favorite["uuid"], size = 12, color = ft.Colors.GREY_700),
-                                    ft.Button(text = "See more", on_click = lambda e, uuid = favorite["uuid"]: self.update_contents(uuid))
-                                ]
-                            )
-                        ]
-                        ),
-                        
-                        padding = ft.padding.all(20),
+                            
+                            padding = ft.padding.all(20),
+                        )
                     )
                 )
-            )
+        except Exception as e:
+            app_logger.error(f"Something went wrong while loading favorites: {e}")
         self.tabs.update()
 
     def cape_animation_in_thread(self, page_obj, cape_img_control) -> None:
