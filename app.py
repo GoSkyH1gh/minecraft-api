@@ -37,6 +37,8 @@ class FakeMCApp:
         self.page = page
         self.page.title = "FakeMC"
 
+        self.hypixel_api_key = os.getenv("hypixel_api_key")
+
         self.cape_id = ""
         self.uuid = ""
         self.cape_showcase = None
@@ -44,6 +46,18 @@ class FakeMCApp:
         self.has_cape = None
         self.skin_id = None
         self.favorites_location = current_directory / "favorites.json"
+        self.api_edit_mode = False # for config tab, changes api_key to be editable
+        
+        self.enable_gradient = True
+        self.hypixel_integration_enabled = True # enables or disables Hypixel integration
+        
+        if self.page.platform_brightness == ft.Brightness.LIGHT: # disables gradient if theme is light
+            self.enable_gradient = False
+            self.app_theme_light = True
+        else:
+            self.app_theme_light = False
+        
+
 
         # flet ui starts here
         self.username_entry = ft.TextField(border_color = "#EECCDD", on_submit = self.get_data_from_button, hint_text="Search by username or UUID")
@@ -93,7 +107,6 @@ class FakeMCApp:
             elevation = 1,
             margin = ft.padding.only(right = 60),
             visible = False
-            
         ) 
 
         self.guild_list_view = ft.ListView(spacing = 10, width = 200, height = 450, auto_scroll = True,)
@@ -119,6 +132,22 @@ class FakeMCApp:
             expand = True,
             max_extent=150,
         )
+
+        # --- tab 4 (config)
+        self.app_theme_dark_switch = ft.Switch(label = " Dark Theme", on_change = self.switch_theme, value = not self.app_theme_light)
+
+        self.settings_divider = ft.Divider()
+
+        self.enable_hypixel = ft.Switch(label = " Hypixel API integration", on_change = self.hypixel_api_switch, value = True)
+
+        self.api_key_label = ft.Text("Current Hypixel API Key: ") # a label
+        self.api_key_display = ft.Text(self.hypixel_api_key, selectable = True, font_family = "") # displays the actual key
+        self.api_key_entry = ft.TextField(hint_text = "Hypixel API Key")
+        self.api_key_button = ft.Button(text = "Change API Key", on_click = self.api_button_click)
+
+        self.api_key_row = ft.Row(controls = [self.api_key_label, self.api_key_display, self.api_key_button])
+
+        self.config_col = ft.Column(controls = [self.app_theme_dark_switch, self.settings_divider, self.enable_hypixel, self.api_key_row])
 
         # logic for gradient
         self.home_page_container = ft.Container(
@@ -148,6 +177,13 @@ class FakeMCApp:
                     content = ft.Container(
                         content = self.cape_gallery,
                         padding = 20,
+                    )
+                ),
+                ft.Tab(
+                    text = "Config",
+                    content = ft.Container(
+                        content = self.config_col,
+                        padding = ft.padding.only(40, 20, 40, 20),
                     )
                 )
             ],
@@ -240,7 +276,10 @@ class FakeMCApp:
             self.favorite_chip.visible = False
         self.page.update()
 
-        self.load_hypixel_data(reload_needed)
+        if self.hypixel_integration_enabled:
+            self.load_hypixel_data(reload_needed)
+        else:
+            app_logger.info("hypixel integration is currently disabled")
 
     def animate_cape(self) -> None:
         animation_thread = threading.Thread(
@@ -266,7 +305,7 @@ class FakeMCApp:
     def update_gradient(self) -> None:
         bgcolor_instance = capeAnimator(self.cape_showcase)
         bgcolor = bgcolor_instance.get_average_color_pil()
-        if bgcolor is not None:
+        if bgcolor is not None and self.enable_gradient:
             self.home_page_container.gradient = ft.RadialGradient(colors = [bgcolor, ft.Colors.TRANSPARENT], center = ft.Alignment(-0.35, 0), radius = 0.7) # handle gradient color
         else:
             self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
@@ -276,8 +315,7 @@ class FakeMCApp:
     def load_hypixel_data(self, reload_needed) -> None:
         # --- Hypixel api integration ---
         if self.uuid is not None:
-            api_key = os.getenv("hypixel_api_key")
-            user1 = getHypixelData(self.uuid, api_key)
+            user1 = getHypixelData(self.uuid, self.hypixel_api_key)
             first_login, player_rank = user1.get_basic_data()
             if first_login != None and player_rank != None:
                 self.hypixel_info_card.visible = True
@@ -405,6 +443,56 @@ class FakeMCApp:
             page_obj.update()
             time.sleep(0.04)
 
+    def api_button_click(self, e) -> None:
+        if self.api_edit_mode: # this happens after the user clicks has inputted the new api key
+            self.api_key_row.controls = [self.api_key_label, self.api_key_display, self.api_key_button] # update the controls to include the entry
+            self.hypixel_api_key = self.api_key_entry.value
+            self.api_key_display.value = self.hypixel_api_key
+
+            self.api_key_button.text = "Change API Key"
+
+            app_logger.info(f"new api key: {self.hypixel_api_key}")
+            try:
+                with open(current_directory / ".env", "w") as file:
+                    file.write(f'hypixel_api_key = "{self.hypixel_api_key}"')
+            except:
+                app_logger.error("Coudn't save new .env file containing api key")
+
+            self.api_edit_mode = False
+            self.page.update()
+        else: # opens the edit menu
+            self.api_key_row.controls = [self.api_key_label, self.api_key_entry, self.api_key_button] # update the controls to include the api key text
+            self.api_key_button.text = "Save Changes"
+            self.api_edit_mode = True
+            self.page.update()
+
+    def hypixel_api_switch(self, e) -> None:
+        if self.enable_hypixel.value == True:
+            self.hypixel_integration_enabled = True
+            self.guild_list_view.visible = True
+            self.page.update()
+            app_logger.info("Switched hypixel integration to ON")
+        else:
+            self.hypixel_integration_enabled = False
+            self.hypixel_info_card.visible = False
+            self.guild_list_view.visible = False
+            self.page.update()
+            app_logger.info("Switched hypixel integration to OFF")
+            
+
+    def switch_theme(self, e) -> None:
+        if self.app_theme_dark_switch.value == True:
+            self.page.theme_mode = ft.ThemeMode.DARK
+            self.app_theme_light = False
+            self.enable_gradient = True
+            self.page.update()
+        else:
+            self.page.theme_mode = ft.ThemeMode.LIGHT
+            self.app_theme_light = True
+            self.enable_gradient = False
+            self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT]) # resets gradient
+            self.page.update()
+
 
 def main_entry_point(page: ft.Page):
     app_instance = FakeMCApp(page)
@@ -417,3 +505,4 @@ def main_entry_point(page: ft.Page):
     app_instance.load_favorites_page()
 
 ft.app(target = main_entry_point)
+
