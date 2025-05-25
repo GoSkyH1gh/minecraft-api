@@ -39,7 +39,7 @@ CAPE_MAP = {
     "26b546a54d519e6a3ff01efa01acce81": "Cobalt"
 }
 
-class getMojangAPIData:
+class GetMojangAPIData:
     def __init__(self, username, uuid = None):
         self.username = username
         self.uuid = uuid
@@ -255,5 +255,5 @@ class getMojangAPIData:
             return None
         
 if __name__ == "__main__":
-    user = getMojangAPIData("goskyhigh")
+    user = GetMojangAPIData("goskyhigh")
     user.get_data()

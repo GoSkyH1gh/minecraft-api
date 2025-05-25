@@ -1,6 +1,8 @@
-from minecraft_api import getMojangAPIData
-from hypixel_api import getHypixelData
-from cape_animator import capeAnimator
+from flet.core.alignment import center
+
+from minecraft_api import GetMojangAPIData
+from hypixel_api import GetHypixelData
+from cape_animator import CapeAnimator
 from utils import pillow_to_b64
 import flet as ft
 import os
@@ -34,6 +36,7 @@ app_logger.info(f"running in: {current_file_path}")
 
 class FakeMCApp:
     def __init__(self, page = ft.Page):
+        self.guild_name = None
         self.page = page
         self.page.title = "FakeMC"
 
@@ -41,6 +44,8 @@ class FakeMCApp:
 
         self.cape_id = ""
         self.uuid = ""
+        self.formated_username = None
+        self.lookup_failed = None
         self.cape_showcase = None
         self.cape_back = None
         self.has_cape = None
@@ -111,13 +116,15 @@ class FakeMCApp:
             visible = False
         ) 
 
-        self.guild_list_view = ft.ListView(spacing = 10, width = 200, height = 450, auto_scroll = True,)
-        self.guild_list_view_c = ft.Container(content = self.guild_list_view, margin = ft.margin.only(bottom = 50, right = 30))
+        self.guild_name_text = ft.Text(value = "", text_align = ft.TextAlign.CENTER)
+        self.guild_list_view = ft.ListView(spacing = 10, width = 200, height = 450, auto_scroll = True)
+        self.guild_col = ft.Column(controls = [self.guild_name_text, self.guild_list_view], horizontal_alignment = ft.CrossAxisAlignment.CENTER)
+        self.guild_list_c = ft.Container(content = self.guild_col, margin = ft.margin.only(bottom = 50, right = 30))
 
         self.img_displays = ft.Row(controls = [self.skin_showcase_img, self.cape_showcase_img_c, self.cape_name], alignment=ft.alignment.top_center)
         self.img_displays_c = ft.Container(padding = ft.padding.only(150, 10), content = self.img_displays)
 
-        self.hypixel_display = ft.Row(controls = [self.hypixel_info_card, self.guild_list_view_c], vertical_alignment=ft.CrossAxisAlignment.START)
+        self.hypixel_display = ft.Row(controls = [self.hypixel_info_card, self.guild_list_c], vertical_alignment=ft.CrossAxisAlignment.START)
 
         self.main_info = ft.Row(controls=[self.img_displays_c, self.hypixel_display], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.START)
 
@@ -235,7 +242,7 @@ class FakeMCApp:
         """
         handles updating the ui, including managing animations
         req data_entered (minecraft username or uuid)
-        reload_needed should be false hypixel guild info does not require updating
+        reload_needed should be false if hypixel guild info does not require updating
         """
         
         self.tabs.selected_index = 0
@@ -245,15 +252,15 @@ class FakeMCApp:
         self.skin_showcase_img.scale = 0.3
         self.page.update()
 
-        if len(data_entered) <= 16: # if text inputed is less than 16 chars (max username length) search is treated as an name
-            user = getMojangAPIData(data_entered)
+        if len(data_entered) <= 16: # if text inputted is less than 16 chars (max username length) search is treated as a name
+            user = GetMojangAPIData(data_entered)
         else:
-            user = getMojangAPIData(None, data_entered)
+            user = GetMojangAPIData(None, data_entered)
         self.formated_username, self.uuid, self.has_cape, self.skin_id, self.cape_id, self.lookup_failed, self.cape_showcase, self.cape_back = user.get_data()
         
         if self.lookup_failed: # if lookup fails resets all controls
             self.reset_controls()
-        else: # this happens if lookup is succesful
+        else: # this happens if lookup is successful
             self.skin_showcase_img.scale = 1 # animates skin showcase img
             self.page.update()
             
@@ -287,14 +294,14 @@ class FakeMCApp:
             self.favorite_chip.visible = False
         self.page.update()
 
-        if self.hypixel_api_key != None and self.hypixel_api_key != "":
+        if self.hypixel_api_key is not None and self.hypixel_api_key != "":
             if self.hypixel_integration_enabled:
                 app_logger.info(f"accessing hypixel api with api key: {self.hypixel_api_key}")
-                self.load_hypixel_data(reload_needed)
+                self.load_hypixel_data(reload_needed) 
             else:
                 app_logger.info("hypixel integration is currently disabled")
         else:
-            if not self.user_dismissed_no_api_banner:
+            if not self.user_dismissed_no_api_banner: # only shows banner if it hasn't already been dismissed by the user
                 self.page.open(self.no_api_key_banner)
 
     def animate_cape(self) -> None:
@@ -319,7 +326,7 @@ class FakeMCApp:
         self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
 
     def update_gradient(self) -> None:
-        bgcolor_instance = capeAnimator(self.cape_showcase)
+        bgcolor_instance = CapeAnimator(self.cape_showcase)
         bgcolor = bgcolor_instance.get_average_color_pil()
         if bgcolor is not None and self.enable_gradient:
             self.home_page_container.gradient = ft.RadialGradient(colors = [bgcolor, ft.Colors.TRANSPARENT], center = ft.Alignment(-0.35, 0), radius = 0.7) # handle gradient color
@@ -331,9 +338,9 @@ class FakeMCApp:
     def load_hypixel_data(self, reload_needed) -> None:
         # --- Hypixel api integration ---
         if self.uuid is not None:
-            user1 = getHypixelData(self.uuid, self.hypixel_api_key)
+            user1 = GetHypixelData(self.uuid, self.hypixel_api_key)
             first_login, player_rank = user1.get_basic_data()
-            if first_login != None and player_rank != None:
+            if first_login is not None and player_rank is not None:
                 self.hypixel_info_card.visible = True
                 self.first_login_text.value = f"Account first saw on: {first_login}"
                 self.player_rank_text.value = player_rank
@@ -344,8 +351,9 @@ class FakeMCApp:
                 self.hypixel_info_card.visible = False
                 self.page.update()
             guild_members = []
-            guild_members = user1.get_guild_info()
+            guild_members, self.guild_name = user1.get_guild_info()
             app_logger.debug(guild_members)
+            app_logger.info(f"{self.formated_username}'s guild is {self.guild_name}")
         else:
             self.guild_list_view.controls.clear()
             self.page.update()
@@ -354,16 +362,18 @@ class FakeMCApp:
         if guild_members is None:
             self.guild_list_view.controls.clear()
             self.page.update()
+            self.guild_name_text.value = ""
 
         if reload_needed:
             self.guild_list_view.controls.clear()
             if guild_members is not None:
                 for member in guild_members:
-                    guild_showcase = getMojangAPIData(None, member)
+                    guild_showcase = GetMojangAPIData(None, member)
                     guild_member_name = guild_showcase.get_name()
                     if guild_member_name is not None:
                         self.guild_list_view.controls.append(ft.Button(text = guild_member_name, on_click = lambda e, name_to_pass = guild_member_name: self.update_contents(name_to_pass, False)))
                         self.page.update()
+                        self.guild_name_text.value = self.guild_name
 
     def favorites_clicked(self, e) -> None:
         # get data from favorites.json
@@ -398,7 +408,7 @@ class FakeMCApp:
             return []
     
     def delete_favorite(self, uuid_to_delete) -> None:
-        """Delets a favorite, by uuid"""
+        """Deletes a favorite, by uuid"""
         favorites = self.load_favorites()
         for favorite in favorites:
             if favorite["uuid"] == uuid_to_delete:
@@ -453,7 +463,7 @@ class FakeMCApp:
         self.tabs.update()
 
     def cape_animation_in_thread(self, page_obj, cape_img_control) -> None:
-        animator = capeAnimator(Image.open(current_directory / "cape" / f"{self.cape_id}.png"))
+        animator = CapeAnimator(Image.open(current_directory / "cape" / f"{self.cape_id}.png"))
         while animator.get_revealed_pixels() < 160:
             cape_img_control.src_base64 = animator.animate()
             page_obj.update()
@@ -472,7 +482,7 @@ class FakeMCApp:
                 with open(current_directory / ".env", "w") as file:
                     file.write(f'hypixel_api_key = "{self.hypixel_api_key}"')
             except:
-                app_logger.error("Coudn't save new .env file containing api key")
+                app_logger.error("Couldn't save new .env file containing api key")
 
             self.api_edit_mode = False
             self.page.update()
@@ -500,7 +510,7 @@ class FakeMCApp:
         self.user_dismissed_no_api_banner = True
 
     def switch_theme(self, e) -> None:
-        if self.app_theme_dark_switch.value == True:
+        if self.app_theme_dark_switch.value:
             self.page.theme_mode = ft.ThemeMode.DARK
             self.app_theme_light = False
             self.enable_gradient = True

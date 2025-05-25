@@ -5,7 +5,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class capeAnimator:
+class CapeAnimator:
     def __init__(self, cape_img):
         self.cape_img = cape_img
         self.revealed_pixels = 0
@@ -45,7 +45,7 @@ class capeAnimator:
 
 if __name__ == "__main__":
     cape_img = Image.open("C:/Users/serba/Downloads/Founder's.png")
-    founders_cape = capeAnimator(cape_img)
+    founders_cape = CapeAnimator(cape_img)
     while founders_cape.revealed_pixels <= founders_cape.total_pixels:
         founders_cape.animate()
     founders_cape.animated_pil_image.show()

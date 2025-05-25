@@ -19,7 +19,7 @@ rank_map = {
 MAX_GUILD_MEMBERS_TO_FETCH = 15
 
 
-class getHypixelData:
+class GetHypixelData:
     def __init__(self, uuid, hypixel_api_key):
         self.uuid = uuid
         self.api_key = hypixel_api_key
@@ -49,24 +49,25 @@ class getHypixelData:
             player_rank = None
 
         except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP error occured: {e}")
+            logger.error(f"HTTP error occurred: {e}")
             return None, None
         except requests.exceptions.RequestException as e:
-            logger.error(f"Request exception occured: {e}")
+            logger.error(f"Request exception occurred: {e}")
             return None, None
         except Exception as e:
             logger.warning(f"something went wrong while getting Hypixel player data: {e}")
             return None, None
-        
-        try:
-            with open("hypixel_player_data.json", "w", encoding="utf-8") as file:
-                json.dump(json_player_data, file, indent = 4)
+
+        #try:
+        #    with open("hypixel_player_data.json", "w", encoding="utf-8") as file:
+        #        json.dump(json_player_data, file, indent = 4)
+
         except Exception as e:
-            logger.error(f"Something went wrong while proccessing Hypixel data: {e}")
+            logger.error(f"Something went wrong while processing Hypixel data: {e}")
             return None, None
         
         try:
-            first_login = json_player_data["player"]["firstLogin"] / 1000 # transforms to standard (non miliseconds) UNIX time
+            first_login = json_player_data["player"]["firstLogin"] / 1000 # transforms to standard (non milliseconds) UNIX time
             first_login_formatted = datetime.datetime.fromtimestamp(first_login).strftime("%m/%Y")
         except Exception as e:
             logger.warning(f"something went wrong with first login date: {e}")
@@ -93,8 +94,8 @@ class getHypixelData:
     def get_guild_info(self):
         """
         requires uuid and api key
-        returns a list with a specified number of guild members
-        return None if it fails
+        returns a list with a specified number of guild members and guild_name
+        return None, None if it fails
         """
         try:
             payload = {"player": self.uuid}
@@ -108,35 +109,38 @@ class getHypixelData:
             guild_response.raise_for_status()
 
             logger.debug(guild_response)
-            if guild_response.json()["guild"] == None:
+            if guild_response.json()["guild"] is None:
                 logger.info("no guild")
-                return None
-            
-            members = guild_response.json()["guild"]["members"]
+                return None, None
+
+            guild_response_json = guild_response.json()
+
+            members = guild_response_json["guild"]["members"]
+            guild_name = guild_response_json["guild"]["name"]
             guild_members = []
             for index, member in enumerate(members):
                 if index < MAX_GUILD_MEMBERS_TO_FETCH: # gets the first x members of the guild
                     guild_members.append(member["uuid"])
 
-            return guild_members
+            return guild_members, guild_name
         except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP error occured: {e}")
-            return None
+            logger.error(f"HTTP error occurred: {e}")
+            return None, None
         except requests.exceptions.RequestException as e:
-            logger.error(f"Request exception occured: {e}")
-            return None
+            logger.error(f"Request exception occurred: {e}")
+            return None, None
         except KeyError as e:
-            logger.warning(f"coudn't find {e}")
-            return None
+            logger.warning(f"couldn't find {e}")
+            return None, None
         except Exception as e:
             logger.warning(f"something went wrong while getting hypixel guild info: {e}")
-            return None
+            return None, None
 
 
 if __name__ == "__main__":
     uuid = "bb3c62c3428340789779d1b0db7a7743"
     hypixel_api_key = os.getenv("hypixel_api_key")
 
-    user = getHypixelData(uuid, hypixel_api_key)
+    user = GetHypixelData(uuid, hypixel_api_key)
     #user.get_basic_data()
     user.get_guild_info()
