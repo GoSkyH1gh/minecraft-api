@@ -161,9 +161,16 @@ class FakeMCApp:
         # no api key banner
 
         self.no_api_key_banner = ft.Banner(
-            content = ft.Text(value = "You didn't enter a Hypixel API Key. Hypixel integration requires an API Key"),
+            content = ft.Text(value = "You didn't enter a Hypixel API Key. Please enter one in Settings. Hypixel integration requires an API Key"),
             actions = [
                 ft.TextButton(text = "Ignore", on_click = self.dismiss_no_api_key_banner)
+            ]
+        )
+
+        self.hypixel_request_error_banner = ft.Banner(
+            content=ft.Text(value="Your Hypixel API key is invalid. Please update it in Settings or disable Hypixel integration."),
+            actions=[
+                ft.TextButton(text="Ignore", on_click = self.dismiss_invalid_api_key_banner)
             ]
         )
 
@@ -339,17 +346,28 @@ class FakeMCApp:
         # --- Hypixel api integration ---
         if self.uuid is not None:
             user1 = GetHypixelData(self.uuid, self.hypixel_api_key)
-            first_login, player_rank = user1.get_basic_data()
-            if first_login is not None and player_rank is not None:
-                self.hypixel_info_card.visible = True
-                self.first_login_text.value = f"Account first saw on: {first_login}"
-                self.player_rank_text.value = player_rank
-                self.page.update()
+            first_login, player_rank, hypixel_request_status = user1.get_basic_data()
+            if hypixel_request_status == "success":
+                if first_login is not None and player_rank is not None:
+                    self.hypixel_info_card.visible = True
+                    self.first_login_text.value = f"Account first saw on: {first_login}"
+                    self.player_rank_text.value = player_rank
+                    self.page.update()
+                else:
+                    self.first_login_text.value = ""
+                    self.player_rank_text.value = ""
+                    self.hypixel_info_card.visible = False
+                    self.page.update()
+            elif hypixel_request_status == "invalid_api_key":
+                self.page.open(self.hypixel_request_error_banner)
+            elif hypixel_request_status == "http_error":
+                pass
+            elif hypixel_request_status == "request_error":
+                pass
+            elif hypixel_request_status == "unknown_error":
+                pass
             else:
-                self.first_login_text.value = ""
-                self.player_rank_text.value = ""
-                self.hypixel_info_card.visible = False
-                self.page.update()
+                app_logger.error(f"Didn't receive all arguments for get_basic_data from class GetHypixelData")
             guild_members = []
             guild_members, self.guild_name = user1.get_guild_info()
             app_logger.debug(guild_members)
@@ -508,6 +526,9 @@ class FakeMCApp:
     def dismiss_no_api_key_banner(self, e) -> None:
         self.page.close(self.no_api_key_banner)
         self.user_dismissed_no_api_banner = True
+
+    def dismiss_invalid_api_key_banner(self, e) -> None:
+        self.page.close(self.hypixel_request_error_banner)
 
     def switch_theme(self, e) -> None:
         if self.app_theme_dark_switch.value:
