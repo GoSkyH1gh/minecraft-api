@@ -8,3 +8,4 @@ latest.log
 build/
 dist/
 app.spec
+.idea/
