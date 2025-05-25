@@ -51,6 +51,8 @@ class FakeMCApp:
         self.enable_gradient = True
         self.hypixel_integration_enabled = True # enables or disables Hypixel integration
         
+        self.user_dismissed_no_api_banner = False # once this is True, banner will no longer be shown
+
         if self.page.platform_brightness == ft.Brightness.LIGHT: # disables gradient if theme is light
             self.enable_gradient = False
             self.app_theme_light = True
@@ -149,6 +151,15 @@ class FakeMCApp:
 
         self.config_col = ft.Column(controls = [self.app_theme_dark_switch, self.settings_divider, self.enable_hypixel, self.api_key_row])
 
+        # no api key banner
+
+        self.no_api_key_banner = ft.Banner(
+            content = ft.Text(value = "You didn't enter a Hypixel API Key. Hypixel integration requires an API Key"),
+            actions = [
+                ft.TextButton(text = "Ignore", on_click = self.dismiss_no_api_key_banner)
+            ]
+        )
+
         # logic for gradient
         self.home_page_container = ft.Container(
             gradient = ft.RadialGradient(
@@ -180,7 +191,7 @@ class FakeMCApp:
                     )
                 ),
                 ft.Tab(
-                    text = "Config",
+                    text = "Settings",
                     content = ft.Container(
                         content = self.config_col,
                         padding = ft.padding.only(40, 20, 40, 20),
@@ -276,10 +287,15 @@ class FakeMCApp:
             self.favorite_chip.visible = False
         self.page.update()
 
-        if self.hypixel_integration_enabled:
-            self.load_hypixel_data(reload_needed)
+        if self.hypixel_api_key != None and self.hypixel_api_key != "":
+            if self.hypixel_integration_enabled:
+                app_logger.info(f"accessing hypixel api with api key: {self.hypixel_api_key}")
+                self.load_hypixel_data(reload_needed)
+            else:
+                app_logger.info("hypixel integration is currently disabled")
         else:
-            app_logger.info("hypixel integration is currently disabled")
+            if not self.user_dismissed_no_api_banner:
+                self.page.open(self.no_api_key_banner)
 
     def animate_cape(self) -> None:
         animation_thread = threading.Thread(
@@ -479,6 +495,9 @@ class FakeMCApp:
             self.page.update()
             app_logger.info("Switched hypixel integration to OFF")
             
+    def dismiss_no_api_key_banner(self, e) -> None:
+        self.page.close(self.no_api_key_banner)
+        self.user_dismissed_no_api_banner = True
 
     def switch_theme(self, e) -> None:
         if self.app_theme_dark_switch.value == True:
