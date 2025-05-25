@@ -27,8 +27,8 @@ class GetHypixelData:
     def get_basic_data(self):
         """
         requires uuid and api key
-        returns first login date (as month/year format) and player rank
-        returns None, None if player is not found
+        returns first login date (as month/year format) and player rank and request_status
+        returns None, None, None if player is not found
         """
         payload = {
             "uuid": self.uuid
@@ -49,29 +49,37 @@ class GetHypixelData:
             player_rank = None
 
         except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP error occurred: {e}")
-            return None, None
+            if e.response.status_code == 403:
+                logger.error(f"Invalid API key: {e}")
+                request_status = "invalid_api_key"
+            else:
+                logger.error(f"HTTP error occurred: {e}")
+                request_status = "http_error"
+            return None, None, request_status
         except requests.exceptions.RequestException as e:
             logger.error(f"Request exception occurred: {e}")
-            return None, None
+            request_status = "request_error"
+            return None, None, request_status
         except Exception as e:
             logger.warning(f"something went wrong while getting Hypixel player data: {e}")
-            return None, None
+            request_status = "unkown_error"
+            return None, None, request_status
 
         #try:
         #    with open("hypixel_player_data.json", "w", encoding="utf-8") as file:
         #        json.dump(json_player_data, file, indent = 4)
-
-        except Exception as e:
-            logger.error(f"Something went wrong while processing Hypixel data: {e}")
-            return None, None
+        #
+        #except Exception as e:
+        #    logger.error(f"Something went wrong while processing Hypixel data: {e}")
+        #    return None, None,
         
         try:
             first_login = json_player_data["player"]["firstLogin"] / 1000 # transforms to standard (non milliseconds) UNIX time
             first_login_formatted = datetime.datetime.fromtimestamp(first_login).strftime("%m/%Y")
         except Exception as e:
             logger.warning(f"something went wrong with first login date: {e}")
-            return None, None
+            request_status = "date_error"
+            return None, None, request_status
         
         try:
             player_rank = json_player_data["player"]["rank"]
@@ -80,15 +88,18 @@ class GetHypixelData:
                 player_rank = json_player_data["player"]["newPackageRank"]
             except KeyError:
                 logger.info("player has no rank")
-                return first_login_formatted, "no rank"
+                request_status = "success"
+                return first_login_formatted, "no rank", request_status
         
         try:
             player_rank_formatted = rank_map[player_rank]
             logger.info(f"player rank: {player_rank_formatted}")
+            request_status = "success"
         except KeyError:
             player_rank_formatted = player_rank
             logging.warning(f"rank not identified: {player_rank_formatted}")
-        return first_login_formatted, player_rank_formatted
+            request_status = "success"
+        return first_login_formatted, player_rank_formatted, request_status
         
 
     def get_guild_info(self):
