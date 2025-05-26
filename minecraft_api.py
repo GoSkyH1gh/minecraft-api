@@ -74,7 +74,7 @@ class GetMojangAPIData:
         
     def get_uuid(self) -> bool:
         """
-        recieves uuid based on username
+        receives uuid based on username
         """
         try:
             request = requests.get(f"https://api.minecraftservices.com/minecraft/profile/lookup/name/{self.username}")
@@ -91,7 +91,7 @@ class GetMojangAPIData:
     
     def get_skin_data(self) -> None:
         """
-        This function recieves data about the skin and cape, requires UUID
+        This function receives data about the skin and cape, requires UUID
         structure is here because it's confusing: https://minecraft.wiki/w/Mojang_API#Query_player's_skin_and_cape
         but basically there's a main json which contains a value that is base64 encoded
         that is where skin and cape data are (another json)

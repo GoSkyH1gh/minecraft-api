@@ -1,5 +1,3 @@
-from flet.core.alignment import center
-
 from minecraft_api import GetMojangAPIData
 from hypixel_api import GetHypixelData
 from cape_animator import CapeAnimator
@@ -52,6 +50,7 @@ class FakeMCApp:
         self.skin_id = None
         self.favorites_location = current_directory / "favorites.json"
         self.api_edit_mode = False # for config tab, changes api_key to be editable
+        self.guild_members_to_fetch = 15
         
         self.enable_gradient = True
         self.hypixel_integration_enabled = True # enables or disables Hypixel integration
@@ -156,7 +155,19 @@ class FakeMCApp:
 
         self.api_key_row = ft.Row(controls = [self.api_key_label, self.api_key_display, self.api_key_button])
 
-        self.config_col = ft.Column(controls = [self.app_theme_dark_switch, self.settings_divider, self.enable_hypixel, self.api_key_row])
+        self.guild_members_to_fetch_text = ft.Text(value = "Max guild members to load")
+        self.guild_members_to_fetch_input = ft.TextField(
+            keyboard_type = ft.KeyboardType.NUMBER,
+            input_filter = ft.NumbersOnlyInputFilter(),
+            value = str(self.guild_members_to_fetch),
+            on_change = self.update_guild_members_to_fetch,
+            width = 50
+        )
+        self.guild_members_to_fetch_info = ft.Icon(name = ft.Icons.INFO_OUTLINE_ROUNDED, tooltip = "Very high values can cause rate limits")
+
+        self.guild_members_to_fetch_row = ft.Row(controls = [self.guild_members_to_fetch_text, self.guild_members_to_fetch_input, self.guild_members_to_fetch_info])
+
+        self.config_col = ft.Column(controls = [self.app_theme_dark_switch, self.settings_divider, self.enable_hypixel, self.api_key_row, self.guild_members_to_fetch_row])
 
         # no api key banner
 
@@ -310,6 +321,9 @@ class FakeMCApp:
         else:
             if not self.user_dismissed_no_api_banner: # only shows banner if it hasn't already been dismissed by the user
                 self.page.open(self.no_api_key_banner)
+            self.guild_list_view.controls.clear()
+            self.hypixel_info_card.visible = False
+            self.guild_name_text.value = ""
 
     def animate_cape(self) -> None:
         animation_thread = threading.Thread(
@@ -328,6 +342,7 @@ class FakeMCApp:
         self.skin_showcase_img.src = "None.png"
         self.cape_showcase_img.src_base64 = ""
         self.cape_name.value = ""
+        self.guild_name_text.value = ""
         self.guild_list_view.controls.clear()
         self.hypixel_info_card.visible = False
         self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
@@ -345,7 +360,7 @@ class FakeMCApp:
     def load_hypixel_data(self, reload_needed) -> None:
         # --- Hypixel api integration ---
         if self.uuid is not None:
-            user1 = GetHypixelData(self.uuid, self.hypixel_api_key)
+            user1 = GetHypixelData(self.uuid, self.hypixel_api_key, self.guild_members_to_fetch)
             first_login, player_rank, hypixel_request_status = user1.get_basic_data()
             if hypixel_request_status == "success":
                 if first_login is not None and player_rank is not None:
@@ -357,19 +372,24 @@ class FakeMCApp:
                     self.first_login_text.value = ""
                     self.player_rank_text.value = ""
                     self.hypixel_info_card.visible = False
+                    self.guild_name_text.value = ""
                     self.page.update()
             elif hypixel_request_status == "invalid_api_key":
+                self.hypixel_request_error_banner.content.value = f"Your Hypixel API key is invalid. Please update it in Settings or disable Hypixel integration."
                 self.page.open(self.hypixel_request_error_banner)
             elif hypixel_request_status == "http_error":
-                pass
+                self.hypixel_request_error_banner.content.value = f"An unexpected HTTP error occurred: {hypixel_request_status}"
             elif hypixel_request_status == "request_error":
-                pass
+                self.hypixel_request_error_banner.content.value = f"An unexpected Request error occurred: {hypixel_request_status}"
             elif hypixel_request_status == "unknown_error":
-                pass
+                self.hypixel_request_error_banner.content.value = f"An unexpected error occurred: {hypixel_request_status}"
             else:
+                self.hypixel_request_error_banner.content.value = f"An unexpected error occurred."
                 app_logger.error(f"Didn't receive all arguments for get_basic_data from class GetHypixelData")
             guild_members = []
             guild_members, self.guild_name = user1.get_guild_info()
+            if self.guild_name is None:
+                self.guild_name_text.value = ""
             app_logger.debug(guild_members)
             app_logger.info(f"{self.formated_username}'s guild is {self.guild_name}")
         else:
@@ -499,8 +519,8 @@ class FakeMCApp:
             try:
                 with open(current_directory / ".env", "w") as file:
                     file.write(f'hypixel_api_key = "{self.hypixel_api_key}"')
-            except:
-                app_logger.error("Couldn't save new .env file containing api key")
+            except Exception as e:
+                app_logger.error(f"Couldn't save new .env file containing api key: {e}")
 
             self.api_edit_mode = False
             self.page.update()
@@ -511,7 +531,7 @@ class FakeMCApp:
             self.page.update()
 
     def hypixel_api_switch(self, e) -> None:
-        if self.enable_hypixel.value == True:
+        if self.enable_hypixel.value:
             self.hypixel_integration_enabled = True
             self.guild_list_view.visible = True
             self.page.update()
@@ -520,6 +540,7 @@ class FakeMCApp:
             self.hypixel_integration_enabled = False
             self.hypixel_info_card.visible = False
             self.guild_list_view.visible = False
+            self.guild_name_text.value = ""
             self.page.update()
             app_logger.info("Switched hypixel integration to OFF")
             
@@ -543,6 +564,12 @@ class FakeMCApp:
             self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT]) # resets gradient
             self.page.update()
 
+    def update_guild_members_to_fetch(self, e) -> None:
+        if self.guild_members_to_fetch_input.value != "":
+            self.guild_members_to_fetch = int(self.guild_members_to_fetch_input.value)
+        else:
+            self.guild_members_to_fetch = 0
+        app_logger.info(f"Updated guild members to fetch: {self.guild_members_to_fetch}")
 
 def main_entry_point(page: ft.Page):
     app_instance = FakeMCApp(page)
