@@ -51,27 +51,34 @@ class FakeMCApp:
         self.skin_id = None
         self.status = None
         self.completed_onboarding_flow = None
+        self.settings = []
         self.favorites_location = current_directory / "favorites.json"
         self.settings_location = current_directory / "config.json"
         
-        try:
-            self.settings = self.load_settings()
-            self.app_theme_light = self.settings["light_theme"]
-            if self.app_theme_light:
-                self.page.theme_mode = ft.ThemeMode.LIGHT
-            else:
-                self.page.theme_mode = ft.ThemeMode.DARK
-            self.hypixel_integration_enabled = self.settings["hypixel_integration"]
-            self.guild_members_to_fetch = self.settings["max_guild_members"]
-            self.completed_onboarding_flow = self.settings["completed_onboarding_flow"]
-        except Exception as e:
-            app_logger.warning(f"No config file detected: {e}")
-            self.settings = {}
-            # uses defaults
-            self.guild_members_to_fetch = 15
-            self.hypixel_integration_enabled = True # enables or disables Hypixel integration
+        if Path.exists(current_directory / "config.json"):
+            try:
+                self.settings = self.load_settings()
+                self.app_theme_light = self.settings["light_theme"]
+                if self.app_theme_light:
+                    self.page.theme_mode = ft.ThemeMode.LIGHT
+                else:
+                    self.page.theme_mode = ft.ThemeMode.DARK
+                self.hypixel_integration_enabled = self.settings["hypixel_integration"]
+                self.guild_members_to_fetch = self.settings["max_guild_members"]
+                self.completed_onboarding_flow = self.settings["completed_onboarding_flow"]
+            except Exception as e:
+                app_logger.warning(f"Something went wrong, resetting to defaults: {e}")
+                self.settings = {}
+                # uses defaults
+                self.guild_members_to_fetch = 15
+                self.hypixel_integration_enabled = True # enables or disables Hypixel integration
+                self.completed_onboarding_flow = True
+                self.save_settings()
+        else:
+            app_logger.info("No config file detected")
             self.completed_onboarding_flow = False
-            self.save_settings()
+            self.hypixel_integration_enabled = False
+            self.guild_members_to_fetch = 15
             
 
         if self.page.platform_brightness == ft.Brightness.LIGHT: # disables gradient if theme is light
@@ -89,8 +96,7 @@ class FakeMCApp:
         if self.completed_onboarding_flow:
             self.load_main_ui()
         else:
-            self.page.add(ft.Text("Welcome to FakeMC", size = 36))
-            self.page.add(ft.Text("Let's personalise your experience", size = 24))
+            self.load_setup_tab_1()
 
     def get_data_from_button(self, e) -> None:
         data_entered = self.username_entry.value.strip()
@@ -191,6 +197,152 @@ class FakeMCApp:
         self.guild_members_to_fetch_row = ft.Row(controls = [self.guild_members_to_fetch_text, self.guild_members_to_fetch_input, self.guild_members_to_fetch_info])
 
         return ft.Column(controls = [self.app_theme_dark_switch, self.settings_divider, self.enable_hypixel, self.api_key_row, self.guild_members_to_fetch_row])
+
+    def load_setup_tab_1(self):
+        # these are the elements for the onboarding tab
+        self.setup_header_text = ft.Text(
+            spans = [
+                ft.TextSpan(
+                    text = "Welcome to FakeMC",
+                    style = ft.TextStyle(
+                        size = 36,
+                        foreground = ft.Paint(
+                            gradient = ft.PaintLinearGradient(
+                                begin = (450, 0),
+                                end = (1000, 0),
+                                colors = [ft.Colors.PURPLE_300, ft.Colors.BLUE_300]
+                            ),
+                            style = ft.PaintingStyle.FILL
+                        )
+                    )
+                )
+            ],
+            text_align = ft.TextAlign.CENTER,
+            width = 600
+        )
+        
+        self.setup_subheader_text = ft.Text("Let's personalise your experience", size = 24, text_align = ft.TextAlign.CENTER, width = 600)
+        self.page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+
+        self.setup_headers_col = ft.Column(controls = [self.setup_header_text, self.setup_subheader_text])
+        self.setup_start_button = ft.Button(text = "Let's start", on_click = self.load_setup_tab_2, style = ft.ButtonStyle(
+            padding = 20
+        ))
+        self.setup_start_button_c = ft.Container(content = self.setup_start_button, padding = 20)
+
+        self.setup_column = ft.Column(
+            controls = [self.setup_headers_col, self.setup_start_button_c],
+            horizontal_alignment = ft.CrossAxisAlignment.CENTER,
+            alignment = ft.MainAxisAlignment.SPACE_AROUND,
+            expand = True
+            )
+        self.setup_column_c = ft.Container(content = self.setup_column, alignment = ft.alignment.top_center)
+        self.page.add(self.setup_column)
+
+    def load_setup_tab_2(self, e):
+        app_logger.info(f"loading page 2 of setup")
+        self.page.controls.clear()
+        self.page.update()
+        
+        self.setup_choose_theme_header = ft.Text("Choose a theme", text_align = ft.TextAlign.CENTER, size = 24)
+        self.setup_light_theme_container = ft.Container(
+            content = ft.Text("Light Theme", color = ft.Colors.BLACK),
+            width = 200, height = 200, ink = True, alignment = ft.alignment.center,
+            bgcolor = ft.Colors.WHITE, border_radius = 15,
+            on_click = lambda e, theme_to_apply = "light": self.apply_theme(theme_to_apply),
+            margin = 20
+            )
+        
+        self.setup_dark_theme_container = ft.Container(
+            content = ft.Text("Dark Theme", color = ft.Colors.WHITE),
+            width = 200, height = 200, ink = True, alignment = ft.alignment.center,
+            bgcolor = ft.Colors.GREY_900, border_radius = 15,
+            on_click = lambda e, theme_to_apply = "dark": self.apply_theme(theme_to_apply),
+            margin = 20
+            )
+        
+        self.setup_themes_row = ft.Row(controls = [self.setup_light_theme_container, self.setup_dark_theme_container], alignment = ft.MainAxisAlignment.CENTER,)
+
+        self.setup_themes_button = ft.Button(text = "Continue", on_click = self.load_setup_tab_3, style = ft.ButtonStyle(
+            padding = 20
+        ))
+
+        self.setup_themes_column = ft.Column(
+            controls = [self.setup_choose_theme_header, self.setup_themes_row, self.setup_themes_button],
+            alignment = ft.MainAxisAlignment.SPACE_AROUND,
+            expand = True,
+            horizontal_alignment = ft.CrossAxisAlignment.CENTER
+            )
+        self.page.add(self.setup_themes_column)
+
+    def load_setup_tab_3(self, e):
+        app_logger.info(f"loading page 3 of setup")
+        self.page.controls.clear()
+        self.page.update()
+
+        self.setup_hypixel_header = ft.Text("Enable Hypixel integration?", size = 24)
+        self.setup_hypixel_info = ft.Text(
+            "Hypixel integration requires an API key. You can get one from https://developer.hypixel.net/dashboard/, but it will expire after 24 hours." \
+            "\n\nYou can add one here, or skip this step for now."
+            )
+
+        self.setup_hypixel_first_col = ft.Column(controls = [self.setup_hypixel_info], width = 450)
+
+        self.setup_hypixel_switch = ft.Switch(label = "Enable Hypixel Integration", on_change = self.setup_hypixel_api_switch_changed)
+        self.setup_hypixel_api_entry = ft.TextField(disabled = True, on_submit = self.check_hypixel_key)
+        self.setup_hypixel_check_button = ft.Button(text = "Check Key", on_click = self.check_hypixel_key, disabled = True)
+        self.setup_hypixel_test_result = ft.Text("")
+
+        self.setup_hypixel_api_row = ft.Row(controls = [self.setup_hypixel_api_entry, self.setup_hypixel_check_button])
+
+        self.setup_hypixel_second_col = ft.Column(
+            controls = [self.setup_hypixel_switch, self.setup_hypixel_api_row, self.setup_hypixel_test_result],
+            horizontal_alignment = ft.CrossAxisAlignment.CENTER
+            )
+
+        self.setup_hypixel_content_row = ft.Row(controls = [self.setup_hypixel_first_col, self.setup_hypixel_second_col], alignment = ft.MainAxisAlignment.SPACE_AROUND)
+
+        self.setup_hypixel_button = ft.Button(text = "Skip", on_click = self.load_setup_tab_4, style = ft.ButtonStyle(
+            padding = 20
+        ))
+
+        self.setup_hypixel_col = ft.Column(
+            controls = [self.setup_hypixel_header, self.setup_hypixel_content_row, self.setup_hypixel_button],
+            expand = True,
+            horizontal_alignment = ft.CrossAxisAlignment.CENTER,
+            alignment = ft.MainAxisAlignment.SPACE_AROUND
+        )
+
+        self.page.add(self.setup_hypixel_col)
+    
+    def load_setup_tab_4(self, e):
+        if self.setup_hypixel_switch.value == False:
+            app_logger.info("Hypixel integration is disabled")
+            self.hypixel_integration_enabled = False
+            self.save_settings()
+            self.hypixel_api_key = ""
+            app_logger.info(f"new api key: {self.hypixel_api_key}")
+            try:
+                with open(current_directory / ".env", "w") as file:
+                    file.write(f'hypixel_api_key = "{self.hypixel_api_key}"')
+            except Exception as e:
+                app_logger.error(f"Couldn't save new .env file containing api key: {e}")
+        self.page.controls.clear()
+        self.page.update()
+
+        self.setup_finish_header = ft.Text(value = "You're done! You can now enjoy the app", size = 24)
+        self.setup_finish_button = ft.Button(text = "Finish", on_click = self.finish_setup, style = ft.ButtonStyle(
+            padding = 20
+        ))
+
+        self.setup_finish_col = ft.Column(
+            controls = [self.setup_finish_header, self.setup_finish_button],
+            alignment = ft.MainAxisAlignment.SPACE_AROUND,
+            horizontal_alignment = ft.CrossAxisAlignment.CENTER,
+            expand = True
+            )
+
+        self.page.add(self.setup_finish_col)
 
     def load_main_ui(self):
         self.home_page = self.load_ui_tab_1()        
@@ -366,16 +518,17 @@ class FakeMCApp:
 
         if self.hypixel_api_key is not None and self.hypixel_api_key != "":
             if self.hypixel_integration_enabled:
-                app_logger.info(f"accessing hypixel api with api key: {self.hypixel_api_key}")
+                app_logger.info(f"accessing hypixel api with api key: ****{self.hypixel_api_key[-4:]}")
                 self.load_hypixel_data(reload_needed) 
             else:
                 app_logger.info("hypixel integration is currently disabled")
         else:
-            if not self.user_dismissed_no_api_banner: # only shows banner if it hasn't already been dismissed by the user
-                self.page.open(self.no_api_key_banner)
-            self.guild_list_view.controls.clear()
-            self.hypixel_info_card.visible = False
-            self.guild_name_text.value = ""
+            if self.hypixel_integration_enabled:
+                if not self.user_dismissed_no_api_banner: # only shows banner if it hasn't already been dismissed by the user
+                    self.page.open(self.no_api_key_banner)
+                self.guild_list_view.controls.clear()
+                self.hypixel_info_card.visible = False
+                self.guild_name_text.value = ""
 
     def animate_cape(self) -> None:
         animation_thread = threading.Thread(
@@ -395,7 +548,7 @@ class FakeMCApp:
         self.cape_showcase_img.src_base64 = ""
         self.cape_name.value = ""
         self.guild_name_text.value = ""
-        self.player_status_text = ""
+        self.player_status_text.value = ""
         self.guild_list_view.controls.clear()
         self.hypixel_info_card.visible = False
         self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
@@ -418,7 +571,7 @@ class FakeMCApp:
             if hypixel_request_status == "success":
                 if first_login is not None and player_rank is not None:
                     self.hypixel_info_card.visible = True
-                    self.first_login_text.value = f"Account first saw on: {first_login}"
+                    self.first_login_text.value = f"Account first seen on: {first_login}"
                     self.player_rank_text.value = player_rank
                     self.page.update()
                 else:
@@ -462,10 +615,21 @@ class FakeMCApp:
                     guild_showcase = GetMojangAPIData(None, member)
                     guild_member_name = guild_showcase.get_name()
                     if guild_member_name is not None:
-                        self.guild_list_view.controls.append(ft.Button(text = guild_member_name, on_click = lambda e, name_to_pass = guild_member_name: self.update_contents(name_to_pass, False)))
+                        self.guild_list_view.controls.append(
+                            ft.Button(
+                            text = guild_member_name,
+                            on_click = lambda e,
+                            name_to_pass = guild_member_name: self.update_contents(name_to_pass, False)
+                            )
+                        )
                         self.page.update()
                         self.guild_name_text.value = self.guild_name
 
+    def get_online_status(self) -> str:
+        active_user_status = OnlineStatus(self.formated_username, self.uuid, self.hypixel_api_key)
+        return active_user_status.start_requests()
+
+    # favorites
     def favorites_clicked(self, e) -> None:
         # get data from favorites.json
         favorites = self.load_favorites()
@@ -488,7 +652,7 @@ class FakeMCApp:
         # write new favorites.json
         self.save_favorites(favorites)
         self.load_favorites_page()
-    
+
     def load_favorites(self) -> list:
         try:
             with open(self.favorites_location, "r", encoding = "utf-8") as file:
@@ -497,7 +661,7 @@ class FakeMCApp:
         except Exception as e:
             app_logger.error(f"Something went while reading favorites.json: {e}")
             return []
-    
+        
     def delete_favorite(self, uuid_to_delete) -> None:
         """Deletes a favorite, by uuid"""
         favorites = self.load_favorites()
@@ -560,6 +724,7 @@ class FakeMCApp:
             page_obj.update()
             time.sleep(0.04)
 
+    # methods for settings
     def api_button_click(self, e) -> None:
         if self.api_edit_mode: # this happens after the user clicks has inputted the new api key
             self.api_key_row.controls = [self.api_key_label, self.api_key_display, self.api_key_button] # update the controls to include the entry
@@ -589,7 +754,6 @@ class FakeMCApp:
             self.guild_list_view.visible = True
             self.page.update()
             app_logger.info("Switched hypixel integration to ON")
-            self.settings["hypixel_integration"] = True
             self.save_settings()
         else:
             self.hypixel_integration_enabled = False
@@ -598,9 +762,8 @@ class FakeMCApp:
             self.guild_name_text.value = ""
             self.page.update()
             app_logger.info("Switched hypixel integration to OFF")
-            self.settings["hypixel_integration"] = False
             self.save_settings()
-            
+ 
     def dismiss_no_api_key_banner(self, e) -> None:
         self.page.close(self.no_api_key_banner)
         self.user_dismissed_no_api_banner = True
@@ -635,10 +798,7 @@ class FakeMCApp:
         self.save_settings()
         app_logger.info(f"Updated guild members to fetch: {self.guild_members_to_fetch}")
 
-    def get_online_status(self) -> str:
-        active_user_status = OnlineStatus(self.formated_username, self.uuid, self.hypixel_api_key)
-        return active_user_status.start_requests()
-
+    # settings 
     def save_settings(self) -> None:
         settings = {
             "light_theme": self.app_theme_light,
@@ -648,13 +808,77 @@ class FakeMCApp:
             }
         with open(self.settings_location, "w") as file:
             json.dump(settings, file, indent = 4)
-    
+        
     def load_settings(self) -> dict:
         with open(self.settings_location, "r") as file:
             settings = json.load(file)
             app_logger.info(f"loaded settings: {settings}")
             return settings
 
+    # methods for onboarding
+    def apply_theme(self, theme_to_apply) -> None:
+        if theme_to_apply == "light":
+            self.app_theme_light = True
+            self.page.theme_mode = ft.ThemeMode.LIGHT
+            self.page.update()
+            self.save_settings()    
+            app_logger.info("selected light theme")
+        elif theme_to_apply == "dark":
+            self.app_theme_light = False
+            self.page.theme_mode = ft.ThemeMode.DARK
+            self.page.update()
+            self.save_settings()
+            app_logger.info("selected dark theme")
+
+    def setup_hypixel_api_switch_changed(self, e):
+        if self.setup_hypixel_switch.value == True:
+            self.setup_hypixel_api_entry.disabled = False
+            self.setup_hypixel_button.disabled = True
+            self.setup_hypixel_check_button.disabled = False
+            self.setup_hypixel_button.text = "Continue"
+            self.page.update()
+        elif self.setup_hypixel_switch.value == False:
+            self.setup_hypixel_api_entry.disabled = True
+            self.setup_hypixel_button.disabled = False
+            self.setup_hypixel_check_button.disabled = True
+            self.setup_hypixel_button.text = "Skip"
+            self.page.update()
+    
+    def check_hypixel_key(self, e):
+        api_key_entered = self.setup_hypixel_api_entry.value
+        test_api_instance = GetHypixelData("f7c77d999f154a66a87dc4a51ef30d19", api_key_entered)
+        _, _, result = test_api_instance.get_basic_data()
+        if result == "success":
+            app_logger.info("Test Api request was successful")
+            self.hypixel_api_key = api_key_entered
+            self.hypixel_integration_enabled = True
+            self.save_settings()
+            app_logger.info("Hypixel integration is enabled")
+            self.setup_hypixel_button.disabled = False
+            self.setup_hypixel_test_result.color = ft.Colors.GREEN_700
+
+            app_logger.info(f"new api key: {self.hypixel_api_key}")
+            try:
+                with open(current_directory / ".env", "w") as file:
+                    file.write(f'hypixel_api_key = "{self.hypixel_api_key}"')
+            except Exception as e:
+                app_logger.error(f"Couldn't save new .env file containing api key: {e}")
+
+            self.setup_hypixel_test_result.value = "Request was successful!"
+            self.page.update()
+        else:
+            self.setup_hypixel_test_result.color = ft.Colors.RED_700
+            self.setup_hypixel_test_result.value = "Request was unsuccessful. Try checking again in ~20 seconds\nYou can also disable integration and skip this for now"
+            app_logger.info("Test Api request was unsuccessful")
+            self.page.update()
+
+    def finish_setup(self, e):
+        self.completed_onboarding_flow = True
+        self.save_settings()
+        app_logger.info("Completed setup flow")
+        self.page.controls.clear()
+        self.load_main_ui()
+        self.page.update()
 def main_entry_point(page: ft.Page):
     app_instance = FakeMCApp(page)
 

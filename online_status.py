@@ -41,7 +41,7 @@ class OnlineStatus:
             try:
                 self.hypixel_player_status = responses[1]["session"]["online"]
             except Exception as e:
-                logger.warning(f"Something went wrong while fetching Hypixel status {e}")
+                logger.info(f"Something went wrong while fetching Hypixel status (this requires an API key) {e}")
                 self.hypixel_player_status = False
 
             try:
@@ -62,8 +62,9 @@ class OnlineStatus:
             return await response.json()
 
     async def get_hypixel_status(self):
-        async with self.session.get(url = "https://api.hypixel.net/v2/status", params = {"uuid": self.uuid}, headers = {"Api-Key": self.hypixel_api_key}) as response:
-            return await response.json()
+        if self.hypixel_api_key is not None and self.hypixel_api_key != "":
+            async with self.session.get(url = "https://api.hypixel.net/v2/status", params = {"uuid": self.uuid}, headers = {"Api-Key": self.hypixel_api_key}) as response:
+                return await response.json()
 
 if __name__ == "__main__":
     user1 = OnlineStatus("GoSkyHigh", "3ff2e63ad63045e0b96f57cd0eae708d", os.getenv("hypixel_api_key"))
