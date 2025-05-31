@@ -1,6 +1,7 @@
 from minecraft_api import GetMojangAPIData
 from hypixel_api import GetHypixelData
 from cape_animator import CapeAnimator
+from online_status import OnlineStatus
 from utils import pillow_to_b64
 import flet as ft
 import os
@@ -48,24 +49,54 @@ class FakeMCApp:
         self.cape_back = None
         self.has_cape = None
         self.skin_id = None
+        self.status = None
+        self.completed_onboarding_flow = None
         self.favorites_location = current_directory / "favorites.json"
-        self.api_edit_mode = False # for config tab, changes api_key to be editable
-        self.guild_members_to_fetch = 15
+        self.settings_location = current_directory / "config.json"
         
-        self.enable_gradient = True
-        self.hypixel_integration_enabled = True # enables or disables Hypixel integration
-        
-        self.user_dismissed_no_api_banner = False # once this is True, banner will no longer be shown
+        try:
+            self.settings = self.load_settings()
+            self.app_theme_light = self.settings["light_theme"]
+            if self.app_theme_light:
+                self.page.theme_mode = ft.ThemeMode.LIGHT
+            else:
+                self.page.theme_mode = ft.ThemeMode.DARK
+            self.hypixel_integration_enabled = self.settings["hypixel_integration"]
+            self.guild_members_to_fetch = self.settings["max_guild_members"]
+            self.completed_onboarding_flow = self.settings["completed_onboarding_flow"]
+        except Exception as e:
+            app_logger.warning(f"No config file detected: {e}")
+            self.settings = {}
+            # uses defaults
+            self.guild_members_to_fetch = 15
+            self.hypixel_integration_enabled = True # enables or disables Hypixel integration
+            self.completed_onboarding_flow = False
+            self.save_settings()
+            
 
         if self.page.platform_brightness == ft.Brightness.LIGHT: # disables gradient if theme is light
             self.enable_gradient = False
             self.app_theme_light = True
         else:
             self.app_theme_light = False
-        
+
+        self.api_edit_mode = False # for config tab, changes api_key to be editable
+        self.enable_gradient = True
+        self.user_dismissed_no_api_banner = False # once this is True, banner will no longer be shown
 
 
         # flet ui starts here
+        if self.completed_onboarding_flow:
+            self.load_main_ui()
+        else:
+            self.page.add(ft.Text("Welcome to FakeMC", size = 36))
+            self.page.add(ft.Text("Let's personalise your experience", size = 24))
+
+    def get_data_from_button(self, e) -> None:
+        data_entered = self.username_entry.value.strip()
+        self.update_contents(data_entered)
+
+    def load_ui_tab_1(self):
         self.username_entry = ft.TextField(border_color = "#EECCDD", on_submit = self.get_data_from_button, hint_text="Search by username or UUID")
         self.get_data_button = ft.Button(on_click = self.get_data_from_button, text = "Search")
         
@@ -102,10 +133,14 @@ class FakeMCApp:
 
         self.first_login_text = ft.Text(value = "")
         self.player_rank_text = ft.Text(value = "")
+        self.player_status_icon = ft.Icon(name = ft.Icons.CIRCLE_ROUNDED, color = ft.Colors.GREY_700)
+        self.player_status_icon_c = ft.Container(content = self.player_status_icon, padding = ft.padding.only(top = 5))
+        self.player_status_text = ft.Text(value = "")
+        self.player_status_row = ft.Row(controls = [self.player_status_icon_c, self.player_status_text])
 
-        self.hypixel_info_card = ft.Card(content=ft.Container(
+        self.hypixel_info_card = ft.Card(content = ft.Container(
             content = ft.Column(
-                controls= [self.first_login_text, self.player_rank_text]
+                controls= [self.first_login_text, self.player_rank_text, self.player_status_row]
                 ),
             padding = ft.padding.all(20),
             alignment=ft.alignment.top_center
@@ -115,7 +150,7 @@ class FakeMCApp:
             visible = False
         ) 
 
-        self.guild_name_text = ft.Text(value = "", text_align = ft.TextAlign.CENTER)
+        self.guild_name_text = ft.Text(value = "", text_align = ft.TextAlign.CENTER, size = 16)
         self.guild_list_view = ft.ListView(spacing = 10, width = 200, height = 450, auto_scroll = True)
         self.guild_col = ft.Column(controls = [self.guild_name_text, self.guild_list_view], horizontal_alignment = ft.CrossAxisAlignment.CENTER)
         self.guild_list_c = ft.Container(content = self.guild_col, margin = ft.margin.only(bottom = 50, right = 30))
@@ -127,30 +162,18 @@ class FakeMCApp:
 
         self.main_info = ft.Row(controls=[self.img_displays_c, self.hypixel_display], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.START)
 
-        self.home_page = ft.Column(controls = [self.search_c, self.info_c, self.main_info])
+        return ft.Column(controls = [self.search_c, self.info_c, self.main_info])
 
-        # --- tab 2 (favorites) ---
-        self.favorites_listview = ft.ListView(spacing = 20)
-
-        self.favorites_tab = ft.Container(content = self.favorites_listview, margin = 20, padding = 20)
-
-        # --- tab 3 (cape gallery) ---
-        self.cape_gallery = ft.GridView(
-            spacing = 5,
-            expand = True,
-            max_extent=150,
-        )
-
-        # --- tab 4 (config)
+    def load_ui_tab_4(self):
         self.app_theme_dark_switch = ft.Switch(label = " Dark Theme", on_change = self.switch_theme, value = not self.app_theme_light)
 
         self.settings_divider = ft.Divider()
 
-        self.enable_hypixel = ft.Switch(label = " Hypixel API integration", on_change = self.hypixel_api_switch, value = True)
+        self.enable_hypixel = ft.Switch(label = " Hypixel API integration", on_change = self.hypixel_api_switch, value = self.hypixel_integration_enabled)
 
         self.api_key_label = ft.Text("Current Hypixel API Key: ") # a label
-        self.api_key_display = ft.Text(self.hypixel_api_key, selectable = True, font_family = "") # displays the actual key
-        self.api_key_entry = ft.TextField(hint_text = "Hypixel API Key")
+        self.api_key_display = ft.Text(self.hypixel_api_key, selectable = True) # displays the actual key
+        self.api_key_entry = ft.TextField(hint_text = "Hypixel API Key", on_submit = self.api_button_click)
         self.api_key_button = ft.Button(text = "Change API Key", on_click = self.api_button_click)
 
         self.api_key_row = ft.Row(controls = [self.api_key_label, self.api_key_display, self.api_key_button])
@@ -167,10 +190,27 @@ class FakeMCApp:
 
         self.guild_members_to_fetch_row = ft.Row(controls = [self.guild_members_to_fetch_text, self.guild_members_to_fetch_input, self.guild_members_to_fetch_info])
 
-        self.config_col = ft.Column(controls = [self.app_theme_dark_switch, self.settings_divider, self.enable_hypixel, self.api_key_row, self.guild_members_to_fetch_row])
+        return ft.Column(controls = [self.app_theme_dark_switch, self.settings_divider, self.enable_hypixel, self.api_key_row, self.guild_members_to_fetch_row])
+
+    def load_main_ui(self):
+        self.home_page = self.load_ui_tab_1()        
+
+        # --- tab 2 (favorites) ---
+        self.favorites_listview = ft.ListView(spacing = 20)
+
+        self.favorites_tab = ft.Container(content = self.favorites_listview, margin = 20, padding = 20)
+
+        # --- tab 3 (cape gallery) ---
+        self.cape_gallery = ft.GridView(
+            spacing = 5,
+            expand = True,
+            max_extent=150,
+        )
+
+        # --- tab 4 (config)
+        self.config_col = self.load_ui_tab_4()
 
         # no api key banner
-
         self.no_api_key_banner = ft.Banner(
             content = ft.Text(value = "You didn't enter a Hypixel API Key. Please enter one in Settings. Hypixel integration requires an API Key"),
             actions = [
@@ -181,7 +221,7 @@ class FakeMCApp:
         self.hypixel_request_error_banner = ft.Banner(
             content=ft.Text(value="Your Hypixel API key is invalid. Please update it in Settings or disable Hypixel integration."),
             actions=[
-                ft.TextButton(text="Ignore", on_click = self.dismiss_invalid_api_key_banner)
+                ft.TextButton(text = "Ignore", on_click = self.dismiss_invalid_api_key_banner)
             ]
         )
 
@@ -225,12 +265,8 @@ class FakeMCApp:
             ],
             expand = True,
         )
-
+        
         self.page.add(self.tabs)
-
-    def get_data_from_button(self, e) -> None:
-        data_entered = self.username_entry.value.strip()
-        self.update_contents(data_entered)
 
     def create_cape_showcase(self, file) -> None:
         cape_item = ft.Image(
@@ -262,7 +298,7 @@ class FakeMCApp:
         req data_entered (minecraft username or uuid)
         reload_needed should be false if hypixel guild info does not require updating
         """
-        
+
         self.tabs.selected_index = 0
 
         app_logger.info(f"data entered: {data_entered}")
@@ -280,6 +316,7 @@ class FakeMCApp:
             self.reset_controls()
         else: # this happens if lookup is successful
             self.skin_showcase_img.scale = 1 # animates skin showcase img
+            self.player_status_text.value = ""
             self.page.update()
             
             self.formated_username_text.value = self.formated_username
@@ -310,6 +347,21 @@ class FakeMCApp:
                 self.favorite_chip.tooltip = "Favorite"
         else:
             self.favorite_chip.visible = False
+        self.page.update()
+
+        self.status = self.get_online_status()
+        app_logger.info(f"{self.formated_username}'s status: {self.status}")
+        if self.status == "Hypixel":
+            self.player_status_text.value = "Online (Hypixel)"
+            self.player_status_icon.color = ft.Colors.GREEN_800
+        elif self.status == "Wynncraft":
+            self.player_status_text.value = "Online (Wynncraft)"
+            self.player_status_icon.color = ft.Colors.GREEN_800
+        elif self.status == "offline":
+            self.player_status_text.value = "Offline"
+            self.player_status_icon.color = ft.Colors.GREY_700
+        else:
+            self.player_status_text.value = "Unknown"
         self.page.update()
 
         if self.hypixel_api_key is not None and self.hypixel_api_key != "":
@@ -343,6 +395,7 @@ class FakeMCApp:
         self.cape_showcase_img.src_base64 = ""
         self.cape_name.value = ""
         self.guild_name_text.value = ""
+        self.player_status_text = ""
         self.guild_list_view.controls.clear()
         self.hypixel_info_card.visible = False
         self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
@@ -536,6 +589,8 @@ class FakeMCApp:
             self.guild_list_view.visible = True
             self.page.update()
             app_logger.info("Switched hypixel integration to ON")
+            self.settings["hypixel_integration"] = True
+            self.save_settings()
         else:
             self.hypixel_integration_enabled = False
             self.hypixel_info_card.visible = False
@@ -543,6 +598,8 @@ class FakeMCApp:
             self.guild_name_text.value = ""
             self.page.update()
             app_logger.info("Switched hypixel integration to OFF")
+            self.settings["hypixel_integration"] = False
+            self.save_settings()
             
     def dismiss_no_api_key_banner(self, e) -> None:
         self.page.close(self.no_api_key_banner)
@@ -557,29 +614,56 @@ class FakeMCApp:
             self.app_theme_light = False
             self.enable_gradient = True
             self.page.update()
+            self.settings["light_theme"] = False
+            self.save_settings()
         else:
             self.page.theme_mode = ft.ThemeMode.LIGHT
             self.app_theme_light = True
             self.enable_gradient = False
             self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT]) # resets gradient
             self.page.update()
+            self.settings["light_theme"] = True
+            self.save_settings()
 
     def update_guild_members_to_fetch(self, e) -> None:
         if self.guild_members_to_fetch_input.value != "":
             self.guild_members_to_fetch = int(self.guild_members_to_fetch_input.value)
         else:
             self.guild_members_to_fetch = 0
+
+        self.settings["max_guild_members"] = self.guild_members_to_fetch
+        self.save_settings()
         app_logger.info(f"Updated guild members to fetch: {self.guild_members_to_fetch}")
+
+    def get_online_status(self) -> str:
+        active_user_status = OnlineStatus(self.formated_username, self.uuid, self.hypixel_api_key)
+        return active_user_status.start_requests()
+
+    def save_settings(self) -> None:
+        settings = {
+            "light_theme": self.app_theme_light,
+            "max_guild_members": self.guild_members_to_fetch,
+            "hypixel_integration": self.hypixel_integration_enabled,
+            "completed_onboarding_flow": self.completed_onboarding_flow
+            }
+        with open(self.settings_location, "w") as file:
+            json.dump(settings, file, indent = 4)
+    
+    def load_settings(self) -> dict:
+        with open(self.settings_location, "r") as file:
+            settings = json.load(file)
+            app_logger.info(f"loaded settings: {settings}")
+            return settings
 
 def main_entry_point(page: ft.Page):
     app_instance = FakeMCApp(page)
 
-    for file in os.listdir(current_directory / "cape"):
-        if "raw" not in file and "no_cape" not in file and "back" not in file:
-            app_instance.create_cape_showcase(file)
-    page.update()
+    if app_instance.completed_onboarding_flow:
+        for file in os.listdir(current_directory / "cape"):
+            if "raw" not in file and "no_cape" not in file and "back" not in file:
+                app_instance.create_cape_showcase(file)
+        page.update()
 
-    app_instance.load_favorites_page()
+        app_instance.load_favorites_page()
 
 ft.app(target = main_entry_point)
-
