@@ -5,6 +5,8 @@
 
 ![Project homepage screnshot](resources/app_ui_homepage.png "Homepage of app")
 
+
+(a better guide is coming soon)
 ## How to set up
 1. Download all .py files in a new folder
 2. Create a .env file with the following content:
