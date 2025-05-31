@@ -282,8 +282,22 @@ class FakeMCApp:
 
         self.setup_hypixel_header = ft.Text("Enable Hypixel integration?", size = 24)
         self.setup_hypixel_info = ft.Text(
-            "Hypixel integration requires an API key. You can get one from https://developer.hypixel.net/dashboard/, but it will expire after 24 hours." \
-            "\n\nYou can add one here, or skip this step for now."
+            "Hypixel integration requires an API key. You can get one from ",
+            spans = [
+                ft.TextSpan(
+                    "Hypixel Developer Dashboard",
+                    style = ft.TextStyle(
+                        color = ft.Colors.BLUE_800,
+                    ),
+                    url = "https://developer.hypixel.net/dashboard/"
+                ),
+                ft.TextSpan(
+                    ", but it will expire after 24 hours."
+                ),
+                ft.TextSpan(
+                    "\n\nYou can add one here, or skip this step and add one later."
+                )
+            ]
             )
 
         self.setup_hypixel_first_col = ft.Column(controls = [self.setup_hypixel_info], width = 450)
@@ -846,7 +860,7 @@ class FakeMCApp:
     
     def check_hypixel_key(self, e):
         api_key_entered = self.setup_hypixel_api_entry.value
-        test_api_instance = GetHypixelData("f7c77d999f154a66a87dc4a51ef30d19", api_key_entered)
+        test_api_instance = GetHypixelData("f7c77d999f154a66a87dc4a51ef30d19", api_key_entered) # tries to get info about player Hypixel as test
         _, _, result = test_api_instance.get_basic_data()
         if result == "success":
             app_logger.info("Test Api request was successful")
@@ -878,7 +892,12 @@ class FakeMCApp:
         app_logger.info("Completed setup flow")
         self.page.controls.clear()
         self.load_main_ui()
+        for file in os.listdir(current_directory / "cape"):
+            if "raw" not in file and "no_cape" not in file and "back" not in file:
+                self.create_cape_showcase(file)
+        self.load_favorites_page()
         self.page.update()
+
 def main_entry_point(page: ft.Page):
     app_instance = FakeMCApp(page)
 
