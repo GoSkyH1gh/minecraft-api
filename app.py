@@ -46,6 +46,7 @@ class FakeMCApp:
         self.formated_username = None
         self.lookup_failed = None
         self.cape_showcase = None
+        self.skin_showcase = None
         self.cape_back = None
         self.has_cape = None
         self.skin_id = None
@@ -451,11 +452,11 @@ class FakeMCApp:
     def cape_hover(self, e) -> None:
         if e.data == "true":
             if self.has_cape:
-                self.cape_showcase_img.src_base64 = pillow_to_b64(self.cape_back)
+                self.cape_showcase_img.src_base64 = self.cape_back_b64
                 self.cape_showcase_img.update()
         else:
             if self.has_cape:
-                self.cape_showcase_img.src_base64 = pillow_to_b64(self.cape_showcase)        
+                self.cape_showcase_img.src_base64 = self.cape_showcase_b64        
                 self.cape_showcase_img.update()
 
     def update_contents(self, data_entered, reload_needed = True) -> None:
@@ -476,7 +477,7 @@ class FakeMCApp:
             user = GetMojangAPIData(data_entered)
         else:
             user = GetMojangAPIData(None, data_entered)
-        self.formated_username, self.uuid, self.has_cape, self.skin_id, self.cape_id, self.lookup_failed, self.cape_showcase, self.cape_back = user.get_data()
+        self.formated_username, self.uuid, self.has_cape, self.skin_id, self.cape_id, self.lookup_failed, self.cape_showcase_b64, self.cape_back_b64, self.cape_showcase, self.skin_showcase_b64 = user.get_data()
         
         if self.lookup_failed: # if lookup fails resets all controls
             self.reset_controls()
@@ -489,7 +490,7 @@ class FakeMCApp:
             self.uuid_text.value = f"uuid: {self.uuid}"
 
             # loads skin, handles cape animation and gradient color
-            self.skin_showcase_img.src = current_directory / "skin" / f"{self.skin_id}.png"
+            self.skin_showcase_img.src_base64 = self.skin_showcase_b64
             if self.has_cape:
                 self.animate_cape()
                 self.update_gradient()
