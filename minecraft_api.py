@@ -1,3 +1,4 @@
+from utils import pillow_to_b64
 import requests
 import json
 import base64
@@ -50,12 +51,15 @@ class GetMojangAPIData:
         self.cape_id = None
         self.cape_back = None
         self.cape_showcase = None
+        self.skin_showcase_b64 = None
+        self.cape_back_b64 = None
+        self.cape_showcase_b64 = None
 
     
     def get_data(self):
         """
         master function, gets uuid if not provided and then calls get_skin_data
-        returns case-sensitive username, uuid, has_cape(bool), skin_id, cape_id, cape_showcase(PIL), cape_back(PIL)
+        returns case-sensitive username, uuid, has_cape(bool), skin_id, cape_id, cape_showcase(b64), cape_back(b64), cape_showcase(PIL)
         """
         lookup_failed = False
         if not self.uuid:
@@ -69,7 +73,7 @@ class GetMojangAPIData:
         
         if self.skin_url is not None: # only tries to get skin and cape data if they exist
             self.get_skin_images()
-        return self.username, self.uuid, self.has_cape, self.skin_id, self.cape_id, lookup_failed, self.cape_showcase, self.cape_back
+        return self.username, self.uuid, self.has_cape, self.skin_id, self.cape_id, lookup_failed, self.cape_showcase_b64, self.cape_back_b64, self.cape_showcase, self.skin_showcase_b64
         
         
     def get_uuid(self) -> bool:
@@ -127,7 +131,7 @@ class GetMojangAPIData:
         except Exception as e:
             logger.error(f"something went wrong in get_skin_data: {e}")
 
-    def get_skin_images(self) -> None:
+    def get_skin_images(self):
         """
         This downloads the images from skin url and optionally cape url(if it exists)
         then saves them locally 
@@ -150,12 +154,12 @@ class GetMojangAPIData:
                 paste_area = (0, 0)
                 self.skin_showcase.paste(skin_showcase_overlay, paste_area, mask = alpha_mask)
 
+                self.skin_showcase_b64 = pillow_to_b64(self.skin_showcase)
+
                 self.store_img(self.skin_showcase, "skin", "showcase")
                 
             except Exception as e:
                 logger.error(f"something went wrong while cropping skin image: {e}")
-
-            
 
         except Exception as e:
             logger.error(f"something went wrong in get_skin_images: {e}")
@@ -185,12 +189,19 @@ class GetMojangAPIData:
             except Exception as e:
                 logger.error(f"something went wrong while cropping back of cape: {e}")
 
+            self.cape_showcase_b64 = pillow_to_b64(self.cape_showcase)
+            self.cape_back_b64 = pillow_to_b64(self.cape_back)
+
             self.store_img(self.cape_showcase, "cape", "showcase")
             self.store_img(full_cape_image, "cape", "full")
             self.store_img(self.cape_back, "cape", "back")
+
+            return self.skin_showcase_b64, self.cape_showcase_b64, self.cape_back_b64
             
         else:
             logger.info(f"no cape for user {self.username}")
+
+            return self.skin_showcase_b64, None, None
 
     def store_img(self, image, type, format) -> None:
         """
