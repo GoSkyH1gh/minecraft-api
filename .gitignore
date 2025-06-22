@@ -10,3 +10,4 @@ dist/
 app.spec
 .idea/
 config.json
+storage/cache.db
