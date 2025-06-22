@@ -83,7 +83,24 @@ class DataManager:
         }
 
         return response
+    
+    def get_hypixel_data(self, uuid, guild_members_to_fetch) -> dict:
+        hypxiel_data_instance = GetHypixelData(uuid, self.hypixel_api_key, guild_members_to_fetch)
+        first_login, player_rank, hypixel_request_status = hypxiel_data_instance.get_basic_data()
 
+        guild_members = []
+        guild_members, guild_name = hypxiel_data_instance.get_guild_info()
+
+        response = {
+            "status": hypixel_request_status,
+            "first_login": first_login,
+            "player_rank": player_rank,
+            "guild_members": guild_members,
+            "guild_name": guild_name
+        }
+
+        return response
+    
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     load_dotenv()
