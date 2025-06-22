@@ -24,13 +24,13 @@ class CacheManager:
             timestamp INTEGER NOT NULL)
         """)
 
-        self.cursor.execute("""
-        CREATE TABLE IF NOT EXISTS hypixel_cache (
-            uuid TEXT PRIMARY KEY,
-            first_login TEXT,
-            rank TEXT,
-            guild_name TEXT,
-        """)
+        #self.cursor.execute("""
+        #CREATE TABLE IF NOT EXISTS hypixel_cache (
+        #    uuid TEXT PRIMARY KEY,
+        #    first_login TEXT,
+        #    rank TEXT,
+        #    guild_name TEXT
+        #""")
 
     def check_mojang_cache(self, search_term: str, time_between_cache: int = 360):
         results = self.cursor.execute("SELECT timestamp FROM mojang_cache WHERE uuid = ? OR LOWER(username) = ?", (search_term.lower(), search_term.lower(),)).fetchall()
@@ -86,7 +86,7 @@ class CacheManager:
 
         cursor = conn.cursor()
     
-    def is_cache_valid(timestamp, threshold):
+    def is_cache_valid(self, timestamp, threshold):
         return time.time() - timestamp < threshold
 
 
