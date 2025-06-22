@@ -43,23 +43,15 @@ class FakeMCApp:
 
         self.hypixel_api_key = os.getenv("hypixel_api_key")
 
-        self.cape_id = ""
-        self.uuid = ""
-        self.formated_username = None
-        self.lookup_failed = None
-        self.cape_showcase = None
-        self.skin_showcase = None
-        self.cape_back = None
-        self.has_cape = None
-        self.skin_id = None
-        self.status = None
-        self.skin_showcase_b64 = None
+        self.current_mojang_data = None
+
+        # variables for settings
         self.completed_onboarding_flow = None
         self.settings = []
         self.favorites_location = current_directory / "favorites.json"
         self.settings_location = current_directory / "config.json"
         
-        if Path.exists(current_directory / "config.json"):
+        if Path.exists(self.settings_location):
             try:
                 self.settings = self.load_settings()
                 self.app_theme_light = self.settings["light_theme"]
@@ -83,7 +75,7 @@ class FakeMCApp:
             self.completed_onboarding_flow = False
             self.hypixel_integration_enabled = False
             self.guild_members_to_fetch = 15
-            
+        
 
         if self.page.platform_brightness == ft.Brightness.LIGHT: # disables gradient if theme is light
             self.enable_gradient = False
@@ -459,18 +451,17 @@ class FakeMCApp:
     def cape_hover(self, e) -> None:
         if e.data == "true":
             if self.has_cape:
-                self.cape_showcase_img.src_base64 = self.cape_back_b64
+                self.cape_showcase_img.src_base64 = self.current_mojang_data["cape_back_b64"]
                 self.cape_showcase_img.update()
         else:
             if self.has_cape:
-                self.cape_showcase_img.src_base64 = self.cape_showcase_b64        
+                self.cape_showcase_img.src_base64 = self.current_mojang_data["cape_showcase_b64"]
                 self.cape_showcase_img.update()
 
-    def update_contents(self, data_entered, reload_needed = True) -> None:
+    def update_contents(self, data_entered) -> None:
         """
         handles updating the ui, including managing animations
         req data_entered (minecraft username or uuid)
-        reload_needed should be false if hypixel guild info does not require updating
         """
 
         self.tabs.selected_index = 0
@@ -493,116 +484,59 @@ class FakeMCApp:
             self.skin_showcase_img.src_base64 = mojang_data['skin_showcase_b64']
             
             if mojang_data['has_cape']:
+                self.has_cape = True
                 app_logger.info(f"{mojang_data['username']} has cape: {mojang_data['cape_name']}")
                 self.cape_name.value = mojang_data['cape_name']
                 self.animate_cape(mojang_data)
                 self.update_gradient(mojang_data)
             else:
+                self.has_cape = False
                 app_logger.info(f"{mojang_data['username']} has no cape")
                 self.cape_showcase_img.src_base64 = pillow_to_b64(Image.open(current_directory / "cape" / "no_cape.png"))
                 self.cape_name.value = ""
                 self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
                 self.page.update()
 
+            # store current state for cape hover and favorites
+            self.current_mojang_data = mojang_data
+
+            # cache icon management
+            if mojang_data["source"] == "cache":
+                self.data_status_icon.visible = True
+                self.data_status_icon.name = "CACHED"
+                self.data_status_icon.tooltip = "Data loaded from cache"
+                self.data_status_icon.color = ft.Colors.YELLOW_700
+            elif mojang_data["source"] == "mojang_api":
+                self.data_status_icon.visible = True
+                self.data_status_icon.name = "CLOUD_DOWNLOAD"
+                self.data_status_icon.tooltip = "Data loaded from Mojang API"
+                self.data_status_icon.color = ft.Colors.GREEN_800
+
             self.page.update()
         else:
             app_logger.info(f"status for mojang data: {mojang_data['status']}")
             self.reset_controls()
 
-        """
-        cache_instance = CacheManager()
-        valid_cache = cache_instance.check_mojang_cache(data_entered, time_between_cache = 120)
-        app_logger.info(f"valid cache for {data_entered}: {valid_cache}")
-        if not valid_cache: # if cache is not valid, it will update the cache
-            if len(data_entered) <= 16: # if text inputted is less than 16 chars (max username length) search is treated as a name
-                user = GetMojangAPIData(data_entered)
-            else:
-                user = GetMojangAPIData(None, data_entered)
-            self.formated_username, self.uuid, self.has_cape, self.skin_id, self.cape_id, self.lookup_failed, self.cape_showcase_b64, self.cape_back_b64, self.cape_showcase, self.skin_showcase_b64 = user.get_data()
-            self.data_status_icon.visible = True
-            self.data_status_icon.name = "CLOUD_DOWNLOAD"
-            self.data_status_icon.tooltip = "Data loaded from Mojang API"
-            self.data_status_icon.color = ft.Colors.GREEN_800
-            cache_instance.add_mojang_cache(self.uuid, self.formated_username, self.has_cape, self.cape_id, self.skin_showcase_b64, self.cape_showcase_b64, self.cape_back_b64)
-        else:
-            app_logger.info(f"using cache for {data_entered}")
-            data_from_cache = cache_instance.get_data_from_mojang_cache(data_entered)
-            self.data_status_icon.visible = True
-            self.data_status_icon.name = "CACHED"
-            self.data_status_icon.tooltip = "Data loaded from cache"
-            self.data_status_icon.color = ft.Colors.YELLOW_700
-            try:
-                self.uuid = data_from_cache["uuid"]
-                self.formated_username = data_from_cache["username"]
-                self.has_cape = data_from_cache["has_cape"]
-                self.cape_id = data_from_cache["cape_name"]
-                self.skin_showcase_b64 = data_from_cache["skin_showcase_b64"]
-                self.cape_showcase_b64 = data_from_cache["cape_front_b64"]
-                self.cape_back_b64 = data_from_cache["cape_back_b64"]
-                if self.has_cape:
-                    self.cape_showcase = load_base64_to_pillow(self.cape_showcase_b64)
-            except KeyError as e:
-                app_logger.error(f"KeyError while getting data from cache: {e}")
-            app_logger.info(data_from_cache)
-        """
-        """
-        if self.lookup_failed: # if lookup fails resets all controls
-            self.reset_controls()
-        else: # this happens if lookup is successful
-            self.skin_showcase_img.scale = 1 # animates skin showcase img
-            self.player_status_text.value = ""
-            self.page.update()
-            
-            self.formated_username_text.value = self.formated_username
-            self.uuid_text.value = f"uuid: {self.uuid}"
-
-            # loads skin, handles cape animation and gradient color
-            self.skin_showcase_img.src_base64 = self.skin_showcase_b64
-            if self.has_cape:
-                self.animate_cape()
-                self.update_gradient()
-
-                self.cape_name.value = self.cape_id
-            else:
-                self.cape_showcase_img.src_base64 = pillow_to_b64(Image.open(current_directory / "cape" / "no_cape.png"))
-                self.cape_name.value = ""
-                self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
-                self.page.update()
-
         # checks if user is in favorites
         favorites = self.load_favorites()
-        if not self.lookup_failed:
+        if mojang_data["status"] == "success":
             self.favorite_chip.visible = True
-            if {"name": self.formated_username, "uuid": self.uuid, "skin_id": self.skin_id} in favorites:
-                self.favorite_chip.icon = ft.Icons.FAVORITE_SHARP
-                self.favorite_chip.tooltip = "Unfavorite"
+            for favorite in favorites:
+                if favorite["uuid"] == mojang_data["uuid"]:
+                    self.favorite_chip.icon = ft.Icons.FAVORITE_SHARP
+                    self.favorite_chip.tooltip = "Unfavorite"
+                    break
             else:
                 self.favorite_chip.icon = ft.Icons.FAVORITE_OUTLINE
                 self.favorite_chip.tooltip = "Favorite"
         else:
             self.favorite_chip.visible = False
         self.page.update()
-        """
-        """
-        self.status = self.get_online_status()
-        app_logger.info(f"{self.formated_username}'s status: {self.status}")
-        if self.status == "Hypixel":
-            self.player_status_text.value = "Online (Hypixel)"
-            self.player_status_icon.color = ft.Colors.GREEN_800
-        elif self.status == "Wynncraft":
-            self.player_status_text.value = "Online (Wynncraft)"
-            self.player_status_icon.color = ft.Colors.GREEN_800
-        elif self.status == "offline":
-            self.player_status_text.value = "Offline"
-            self.player_status_icon.color = ft.Colors.GREY_700
-        else:
-            self.player_status_text.value = "Unknown"
-        self.page.update()
 
         if self.hypixel_api_key is not None and self.hypixel_api_key != "":
             if self.hypixel_integration_enabled:
                 app_logger.info(f"accessing hypixel api with api key: ****{self.hypixel_api_key[-4:]}")
-                self.load_hypixel_data(reload_needed) 
+                self.load_hypixel_data(mojang_data) 
             else:
                 app_logger.info("hypixel integration is currently disabled")
         else:
@@ -612,7 +546,23 @@ class FakeMCApp:
                 self.guild_list_view.controls.clear()
                 self.hypixel_info_card.visible = False
                 self.guild_name_text.value = ""
-        """
+
+        
+        status = self.get_online_status(mojang_data)
+        app_logger.info(f"{mojang_data["username"]}'s status: {status}")
+        if status == "Hypixel":
+            self.player_status_text.value = "Online (Hypixel)"
+            self.player_status_icon.color = ft.Colors.GREEN_800
+        elif status == "Wynncraft":
+            self.player_status_text.value = "Online (Wynncraft)"
+            self.player_status_icon.color = ft.Colors.GREEN_800
+        elif status == "offline":
+            self.player_status_text.value = "Offline"
+            self.player_status_icon.color = ft.Colors.GREY_700
+        else:
+            self.player_status_text.value = "Unknown"
+        self.page.update()
+        
     def animate_cape(self, mojang_data) -> None:
         animation_thread = threading.Thread(
             target = self.cape_animation_in_thread,
@@ -649,16 +599,16 @@ class FakeMCApp:
             app_logger.warning("Cape color not found")
         self.page.update()
 
-    def load_hypixel_data(self, reload_needed) -> None:
+    def load_hypixel_data(self, mojang_data: dict) -> None:
         # --- Hypixel api integration ---
-        if self.uuid is not None:
-            user1 = GetHypixelData(self.uuid, self.hypixel_api_key, self.guild_members_to_fetch)
-            first_login, player_rank, hypixel_request_status = user1.get_basic_data()
-            if hypixel_request_status == "success":
-                if first_login is not None and player_rank is not None:
+        if mojang_data["uuid"] is not None:
+            hypxiel_data_instance = DataManager(self.hypixel_api_key)
+            hypixel_data = hypxiel_data_instance.get_hypixel_data(mojang_data["uuid"], self.guild_members_to_fetch)
+            if hypixel_data["status"] == "success":
+                if hypixel_data["first_login"] is not None and hypixel_data["player_rank"] is not None:
                     self.hypixel_info_card.visible = True
-                    self.first_login_text.value = f"Account first seen on: {first_login}"
-                    self.player_rank_text.value = player_rank
+                    self.first_login_text.value = f"Account first seen on: {hypixel_data["first_login"]}"
+                    self.player_rank_text.value = f"Player rank: {hypixel_data["player_rank"]}"
                     self.page.update()
                 else:
                     self.first_login_text.value = ""
@@ -666,53 +616,51 @@ class FakeMCApp:
                     self.hypixel_info_card.visible = False
                     self.guild_name_text.value = ""
                     self.page.update()
-            elif hypixel_request_status == "invalid_api_key":
+            # error handling
+            elif hypixel_data["status"] == "invalid_api_key":
                 self.hypixel_request_error_banner.content.value = f"Your Hypixel API key is invalid. Please update it in Settings or disable Hypixel integration."
                 self.page.open(self.hypixel_request_error_banner)
-            elif hypixel_request_status == "http_error":
-                self.hypixel_request_error_banner.content.value = f"An unexpected HTTP error occurred: {hypixel_request_status}"
-            elif hypixel_request_status == "request_error":
-                self.hypixel_request_error_banner.content.value = f"An unexpected Request error occurred: {hypixel_request_status}"
-            elif hypixel_request_status == "unknown_error":
-                self.hypixel_request_error_banner.content.value = f"An unexpected error occurred: {hypixel_request_status}"
+            elif hypixel_data["status"] == "http_error":
+                self.hypixel_request_error_banner.content.value = f"An unexpected HTTP error occurred: {hypixel_data["status"]}"
+            elif hypixel_data["status"] == "request_error":
+                self.hypixel_request_error_banner.content.value = f"An unexpected Request error occurred: {hypixel_data["status"]}"
+            elif hypixel_data["status"] == "unknown_error":
+                self.hypixel_request_error_banner.content.value = f"An unexpected error occurred: {hypixel_data["status"]}"
             else:
                 self.hypixel_request_error_banner.content.value = f"An unexpected error occurred."
                 app_logger.error(f"Didn't receive all arguments for get_basic_data from class GetHypixelData")
-            guild_members = []
-            guild_members, self.guild_name = user1.get_guild_info()
+            
             if self.guild_name is None:
                 self.guild_name_text.value = ""
-            app_logger.debug(guild_members)
-            app_logger.info(f"{self.formated_username}'s guild is {self.guild_name}")
+            app_logger.debug(hypixel_data["guild_members"])
+            app_logger.info(f"{mojang_data["username"]}'s guild is {self.guild_name}")
         else:
             self.guild_list_view.controls.clear()
             self.page.update()
             return
 
-        if guild_members is None:
+        if hypixel_data["guild_members"] is None:
             self.guild_list_view.controls.clear()
             self.page.update()
             self.guild_name_text.value = ""
 
-        if reload_needed:
+        if hypixel_data["guild_members"] is not None:
             self.guild_list_view.controls.clear()
-            if guild_members is not None:
-                for member in guild_members:
-                    guild_showcase = GetMojangAPIData(None, member)
-                    guild_member_name = guild_showcase.get_name()
-                    if guild_member_name is not None:
-                        self.guild_list_view.controls.append(
-                            ft.Button(
+            for member in hypixel_data["guild_members"]:
+                guild_showcase = GetMojangAPIData(None, member)
+                guild_member_name = guild_showcase.get_name()
+                if guild_member_name is not None:
+                    self.guild_list_view.controls.append(
+                        ft.Button(
                             text = guild_member_name,
-                            on_click = lambda e,
-                            name_to_pass = guild_member_name: self.update_contents(name_to_pass, False)
-                            )
+                            on_click = lambda e, name_to_pass = guild_member_name: self.update_contents(name_to_pass)
                         )
-                        self.page.update()
-                        self.guild_name_text.value = self.guild_name
+                    )
+                self.guild_name_text.value = hypixel_data["guild_name"]
+                self.page.update()
 
-    def get_online_status(self) -> str:
-        active_user_status = OnlineStatus(self.formated_username, self.uuid, self.hypixel_api_key)
+    def get_online_status(self, mojang_data) -> str:
+        active_user_status = OnlineStatus(mojang_data["username"], mojang_data["uuid"], self.hypixel_api_key) # TODO UPDATE THIS TO USE NEW DATA FROMAT
         return active_user_status.start_requests()
 
     # favorites
@@ -720,17 +668,21 @@ class FakeMCApp:
         # get data from favorites.json
         favorites = self.load_favorites()
 
-        new_favorite = {"name": self.formated_username, "uuid": self.uuid, "skin_id": self.skin_id}
+        new_favorite = {
+            "uuid": self.current_mojang_data["uuid"],
+            "username": self.current_mojang_data["username"],
+            "skin_b64": self.current_mojang_data["skin_showcase_b64"],
+            }
 
         if new_favorite not in favorites:
             favorites.append(new_favorite)
-            app_logger.info(f"you added {self.formated_username} to favorites!\nuuid: {self.uuid}")
+            app_logger.info(f"you added {self.current_mojang_data["username"]} to favorites!\nuuid: {self.current_mojang_data["uuid"]}")
             self.favorite_chip.icon = ft.Icons.FAVORITE_SHARP
             self.favorite_chip.tooltip = "Unfavorite"
             self.favorite_chip.update()
         else:
             favorites.remove(new_favorite)
-            app_logger.info(f"you removed {self.formated_username} from favorites")
+            app_logger.info(f"you removed {self.current_mojang_data["username"]} from favorites")
             self.favorite_chip.icon = ft.Icons.FAVORITE_OUTLINE
             self.favorite_chip.tooltip = "Favorite"
             self.favorite_chip.update()
@@ -760,7 +712,7 @@ class FakeMCApp:
         self.load_favorites_page() # reload favorites
         self.page.update()
 
-    def save_favorites(self, favorites) -> None:
+    def save_favorites(self, favorites: dict) -> None:
         try:
             with open(self.favorites_location, "w", encoding = "utf-8") as file:
                 json.dump(favorites, file, indent = 4)   
@@ -778,12 +730,12 @@ class FakeMCApp:
                             ft.Row(controls = [
                                 ft.Column(
                                 controls = [
-                                    ft.Image(src = current_directory / "skin" / f"{favorite["skin_id"]}.png", filter_quality = ft.FilterQuality.NONE, height = 100, fit = ft.ImageFit.FILL),
+                                    ft.Image(src_base64 = favorite["skin_b64"], filter_quality = ft.FilterQuality.NONE, height = 100, fit = ft.ImageFit.FILL),
                                 ]
                                 ),
                                 ft.Column(
                                     controls = [
-                                        ft.Text(value = favorite["name"], size = 16),
+                                        ft.Text(value = favorite["username"], size = 16),
                                         ft.Text(value = favorite["uuid"], size = 12, color = ft.Colors.GREY_700),
                                         ft.Row(controls = [
                                             ft.Button(text = "See more", on_click = lambda e, uuid = favorite["uuid"]: self.update_contents(uuid)),
