@@ -26,6 +26,7 @@ class CapeAnimator:
         return self.revealed_pixels
 
     def get_average_color_pil(self):
+        logger.info(f"getting average color of cape: {self.cape_img}")
         image = self.cape_img
         pixels = np.array(image)
         average_color = pixels.mean(axis = (0, 1))

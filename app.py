@@ -3,6 +3,7 @@ from hypixel_api import GetHypixelData
 from cape_animator import CapeAnimator
 from online_status import OnlineStatus
 from cache_manager import CacheManager
+from data_manager import DataManager
 from utils import pillow_to_b64, load_base64_to_pillow
 import flet as ft
 import os
@@ -479,7 +480,36 @@ class FakeMCApp:
         self.skin_showcase_img.scale = 0.3
         self.page.update()
 
-        
+        mojang_data_instance = DataManager(self.hypixel_api_key)
+        mojang_data = mojang_data_instance.get_mojang_data(data_entered)
+        app_logger.info(mojang_data)
+
+        if mojang_data["status"] == "success":
+            app_logger.info(f"success for getting mojang data: {mojang_data['status']}")
+            self.formated_username_text.value = mojang_data['username']
+            self.uuid_text.value = f"uuid: {mojang_data['uuid']}"
+            self.skin_showcase_img.scale = 1 # animates skin showcase img
+            self.player_status_text.value = ""
+            self.skin_showcase_img.src_base64 = mojang_data['skin_showcase_b64']
+            
+            if mojang_data['has_cape']:
+                app_logger.info(f"{mojang_data['username']} has cape: {mojang_data['cape_name']}")
+                self.cape_name.value = mojang_data['cape_name']
+                self.animate_cape(mojang_data)
+                self.update_gradient(mojang_data)
+            else:
+                app_logger.info(f"{mojang_data['username']} has no cape")
+                self.cape_showcase_img.src_base64 = pillow_to_b64(Image.open(current_directory / "cape" / "no_cape.png"))
+                self.cape_name.value = ""
+                self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
+                self.page.update()
+
+            self.page.update()
+        else:
+            app_logger.info(f"status for mojang data: {mojang_data['status']}")
+            self.reset_controls()
+
+        """
         cache_instance = CacheManager()
         valid_cache = cache_instance.check_mojang_cache(data_entered, time_between_cache = 120)
         app_logger.info(f"valid cache for {data_entered}: {valid_cache}")
@@ -514,7 +544,8 @@ class FakeMCApp:
             except KeyError as e:
                 app_logger.error(f"KeyError while getting data from cache: {e}")
             app_logger.info(data_from_cache)
-
+        """
+        """
         if self.lookup_failed: # if lookup fails resets all controls
             self.reset_controls()
         else: # this happens if lookup is successful
@@ -551,7 +582,8 @@ class FakeMCApp:
         else:
             self.favorite_chip.visible = False
         self.page.update()
-
+        """
+        """
         self.status = self.get_online_status()
         app_logger.info(f"{self.formated_username}'s status: {self.status}")
         if self.status == "Hypixel":
@@ -580,13 +612,14 @@ class FakeMCApp:
                 self.guild_list_view.controls.clear()
                 self.hypixel_info_card.visible = False
                 self.guild_name_text.value = ""
-
-    def animate_cape(self) -> None:
+        """
+    def animate_cape(self, mojang_data) -> None:
         animation_thread = threading.Thread(
             target = self.cape_animation_in_thread,
                 args = (
                     self.page,
-                    self.cape_showcase_img
+                    self.cape_showcase_img,
+                    mojang_data["cape_showcase_b64"],
             ),
         )
         animation_thread.daemon = True
@@ -605,8 +638,9 @@ class FakeMCApp:
         self.data_status_icon.visible = False
         self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
 
-    def update_gradient(self) -> None:
-        bgcolor_instance = CapeAnimator(self.cape_showcase)
+    def update_gradient(self, mojang_data: dict) -> None:
+        cape_pillow = load_base64_to_pillow(mojang_data["cape_showcase_b64"])
+        bgcolor_instance = CapeAnimator(cape_pillow)
         bgcolor = bgcolor_instance.get_average_color_pil()
         if bgcolor is not None and self.enable_gradient:
             self.home_page_container.gradient = ft.RadialGradient(colors = [bgcolor, ft.Colors.TRANSPARENT], center = ft.Alignment(-0.35, 0), radius = 0.7) # handle gradient color
@@ -769,8 +803,8 @@ class FakeMCApp:
             app_logger.error(f"Something went wrong while loading favorites: {e}")
         self.tabs.update()
 
-    def cape_animation_in_thread(self, page_obj, cape_img_control) -> None:
-        animator = CapeAnimator(Image.open(current_directory / "cape" / f"{self.cape_id}.png"))
+    def cape_animation_in_thread(self, page_obj, cape_img_control, cape_b64) -> None:
+        animator = CapeAnimator(load_base64_to_pillow(cape_b64))
         while animator.get_revealed_pixels() < 160:
             cape_img_control.src_base64 = animator.animate()
             page_obj.update()
