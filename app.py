@@ -2,7 +2,8 @@ from minecraft_api import GetMojangAPIData
 from hypixel_api import GetHypixelData
 from cape_animator import CapeAnimator
 from online_status import OnlineStatus
-from utils import pillow_to_b64
+from cache_manager import CacheManager
+from utils import pillow_to_b64, load_base64_to_pillow
 import flet as ft
 import os
 from dotenv import load_dotenv
@@ -51,6 +52,7 @@ class FakeMCApp:
         self.has_cape = None
         self.skin_id = None
         self.status = None
+        self.skin_showcase_b64 = None
         self.completed_onboarding_flow = None
         self.settings = []
         self.favorites_location = current_directory / "favorites.json"
@@ -121,9 +123,13 @@ class FakeMCApp:
             visible = False
         )
 
+        self.data_status_icon = ft.Icon("CACHED", color = ft.Colors.YELLOW_700, tooltip = "Data loaded from cache", visible = False)
+
+        self.data_status_icon_c = ft.Container(content = self.data_status_icon, padding = ft.padding.only(top = 5))
+
         self.favorite_chip_c = ft.Container(content = self.favorite_chip, padding = ft.padding.only(top = 5))
 
-        self.username_row = ft.Row(controls = [self.formated_username_text, self.favorite_chip_c])
+        self.username_row = ft.Row(controls = [self.formated_username_text, self.favorite_chip_c, self.data_status_icon_c])
 
         self.info = ft.Column(controls = [self.username_row, self.uuid_text])
         self.info_c = ft.Container(content = self.info, padding = ft.padding.only(120, 10))
@@ -473,12 +479,42 @@ class FakeMCApp:
         self.skin_showcase_img.scale = 0.3
         self.page.update()
 
-        if len(data_entered) <= 16: # if text inputted is less than 16 chars (max username length) search is treated as a name
-            user = GetMojangAPIData(data_entered)
-        else:
-            user = GetMojangAPIData(None, data_entered)
-        self.formated_username, self.uuid, self.has_cape, self.skin_id, self.cape_id, self.lookup_failed, self.cape_showcase_b64, self.cape_back_b64, self.cape_showcase, self.skin_showcase_b64 = user.get_data()
         
+        cache_instance = CacheManager()
+        valid_cache = cache_instance.check_mojang_cache(data_entered, time_between_cache = 120)
+        app_logger.info(f"valid cache for {data_entered}: {valid_cache}")
+        if not valid_cache: # if cache is not valid, it will update the cache
+            if len(data_entered) <= 16: # if text inputted is less than 16 chars (max username length) search is treated as a name
+                user = GetMojangAPIData(data_entered)
+            else:
+                user = GetMojangAPIData(None, data_entered)
+            self.formated_username, self.uuid, self.has_cape, self.skin_id, self.cape_id, self.lookup_failed, self.cape_showcase_b64, self.cape_back_b64, self.cape_showcase, self.skin_showcase_b64 = user.get_data()
+            self.data_status_icon.visible = True
+            self.data_status_icon.name = "CLOUD_DOWNLOAD"
+            self.data_status_icon.tooltip = "Data loaded from Mojang API"
+            self.data_status_icon.color = ft.Colors.GREEN_800
+            cache_instance.add_mojang_cache(self.uuid, self.formated_username, self.has_cape, self.cape_id, self.skin_showcase_b64, self.cape_showcase_b64, self.cape_back_b64)
+        else:
+            app_logger.info(f"using cache for {data_entered}")
+            data_from_cache = cache_instance.get_data_from_mojang_cache(data_entered)
+            self.data_status_icon.visible = True
+            self.data_status_icon.name = "CACHED"
+            self.data_status_icon.tooltip = "Data loaded from cache"
+            self.data_status_icon.color = ft.Colors.YELLOW_700
+            try:
+                self.uuid = data_from_cache["uuid"]
+                self.formated_username = data_from_cache["username"]
+                self.has_cape = data_from_cache["has_cape"]
+                self.cape_id = data_from_cache["cape_name"]
+                self.skin_showcase_b64 = data_from_cache["skin_showcase_b64"]
+                self.cape_showcase_b64 = data_from_cache["cape_front_b64"]
+                self.cape_back_b64 = data_from_cache["cape_back_b64"]
+                if self.has_cape:
+                    self.cape_showcase = load_base64_to_pillow(self.cape_showcase_b64)
+            except KeyError as e:
+                app_logger.error(f"KeyError while getting data from cache: {e}")
+            app_logger.info(data_from_cache)
+
         if self.lookup_failed: # if lookup fails resets all controls
             self.reset_controls()
         else: # this happens if lookup is successful
@@ -566,6 +602,7 @@ class FakeMCApp:
         self.player_status_text.value = ""
         self.guild_list_view.controls.clear()
         self.hypixel_info_card.visible = False
+        self.data_status_icon.visible = False
         self.home_page_container.gradient = ft.RadialGradient(colors = [ft.Colors.TRANSPARENT, ft.Colors.TRANSPARENT])
 
     def update_gradient(self) -> None:
