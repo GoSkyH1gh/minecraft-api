@@ -62,19 +62,25 @@ class FakeMCApp:
                 self.hypixel_integration_enabled = self.settings["hypixel_integration"]
                 self.guild_members_to_fetch = self.settings["max_guild_members"]
                 self.completed_onboarding_flow = self.settings["completed_onboarding_flow"]
+                self.cache_time = self.settings["cache_time"]
+                self.cache_enabled = self.settings["cache_enabled"]
             except Exception as e:
-                app_logger.warning(f"Something went wrong, resetting to defaults: {e}")
+                app_logger.error(f"Something went wrong, resetting to defaults: {e}")
                 self.settings = {}
                 # uses defaults
                 self.guild_members_to_fetch = 15
                 self.hypixel_integration_enabled = True # enables or disables Hypixel integration
                 self.completed_onboarding_flow = True
+                self.cache_time = 300
+                self.cache_enabled = True
                 self.save_settings()
         else:
             app_logger.info("No config file detected")
             self.completed_onboarding_flow = False
             self.hypixel_integration_enabled = False
             self.guild_members_to_fetch = 15
+            self.cache_time = 300
+            self.cache_enabled = True
         
 
         if self.page.platform_brightness == ft.Brightness.LIGHT: # disables gradient if theme is light
@@ -157,7 +163,7 @@ class FakeMCApp:
         )
 
         self.guild_name_text = ft.Text(value = "", text_align = ft.TextAlign.CENTER, size = 16)
-        self.guild_list_view = ft.ListView(spacing = 10, width = 200, height = 450, auto_scroll = True)
+        self.guild_list_view = ft.ListView(spacing = 10, width = 200, height = 450)
         self.guild_col = ft.Column(controls = [self.guild_name_text, self.guild_list_view], horizontal_alignment = ft.CrossAxisAlignment.CENTER)
         self.guild_list_c = ft.Container(content = self.guild_col, margin = ft.margin.only(bottom = 50, right = 30))
 
@@ -173,12 +179,12 @@ class FakeMCApp:
     def load_ui_tab_4(self):
         self.app_theme_dark_switch = ft.Switch(label = " Dark Theme", on_change = self.switch_theme, value = not self.app_theme_light)
 
-        self.settings_divider = ft.Divider()
+        self.settings_divider1 = ft.Divider()
 
         self.enable_hypixel = ft.Switch(label = " Hypixel API integration", on_change = self.hypixel_api_switch, value = self.hypixel_integration_enabled)
 
         self.api_key_label = ft.Text("Current Hypixel API Key: ") # a label
-        self.api_key_display = ft.Text(self.hypixel_api_key, selectable = True) # displays the actual key
+        self.api_key_display = ft.Text(f"{(len(self.hypixel_api_key) - 4) * "*"}{self.hypixel_api_key[-4:]}", selectable = True) # displays the actual key
         self.api_key_entry = ft.TextField(hint_text = "Hypixel API Key", on_submit = self.api_button_click)
         self.api_key_button = ft.Button(text = "Change API Key", on_click = self.api_button_click)
 
@@ -196,7 +202,33 @@ class FakeMCApp:
 
         self.guild_members_to_fetch_row = ft.Row(controls = [self.guild_members_to_fetch_text, self.guild_members_to_fetch_input, self.guild_members_to_fetch_info])
 
-        return ft.Column(controls = [self.app_theme_dark_switch, self.settings_divider, self.enable_hypixel, self.api_key_row, self.guild_members_to_fetch_row])
+        self.settings_divider2 = ft.Divider()
+
+        self.enable_cache_switch = ft.Switch(label = " Use cache", value = self.cache_enabled, on_change=self.cache_switch_changed )
+        self.cache_info = ft.Icon(name = ft.Icons.INFO_OUTLINE_ROUNDED, tooltip = "Caching saves results locally to prevent excessive requests to APIs")
+
+        self.cache_row = ft.Row(controls = [self.enable_cache_switch, self.cache_info])
+
+        self.cache_time_text = ft.Text(value = "Seconds for which cache is valid")
+        self.cache_time_input = ft.TextField(
+            keyboard_type = ft.KeyboardType.NUMBER,
+            input_filter = ft.NumbersOnlyInputFilter(),
+            value = str(self.cache_time),
+            width = 100,
+            on_change = self.update_cache_time
+        )
+
+        self.cache_time_row = ft.Row(controls = [self.cache_time_text, self.cache_time_input])
+
+        self.delete_cache_button = ft.Button(text = "Clear Cache", bgcolor = ft.Colors.RED_400, color = ft.Colors.BLACK, on_click=self.clear_cache)
+        self.cache_size_text = ft.Text(value = self.get_cache_size())
+
+        self.cache_delete_row = ft.Row(controls = [self.delete_cache_button, self.cache_size_text])
+        return ft.Column(
+            controls = [
+                self.app_theme_dark_switch, self.settings_divider1, self.enable_hypixel,self.api_key_row, self.guild_members_to_fetch_row,
+                self.settings_divider2, self.cache_row, self.cache_time_row, self.cache_delete_row]
+            )
 
     def load_setup_tab_1(self):
         # these are the elements for the onboarding tab
@@ -471,7 +503,7 @@ class FakeMCApp:
         self.skin_showcase_img.scale = 0.3
         self.page.update()
 
-        mojang_data_instance = DataManager(self.hypixel_api_key)
+        mojang_data_instance = DataManager(self.hypixel_api_key, self.cache_enabled, self.cache_time)
         mojang_data = mojang_data_instance.get_mojang_data(data_entered)
         app_logger.info(mojang_data)
 
@@ -609,7 +641,7 @@ class FakeMCApp:
             self.guild_name_text.value = ""
             self.guild_list_view.controls.clear()
             self.page.update()
-            hypxiel_data_instance = DataManager(self.hypixel_api_key)
+            hypxiel_data_instance = DataManager(self.hypixel_api_key, self.cache_enabled, self.cache_time)
             hypixel_data = hypxiel_data_instance.get_hypixel_data(mojang_data["uuid"], self.guild_members_to_fetch)
             if hypixel_data["status"] == "success":
                 if hypixel_data["first_login"] is not None and hypixel_data["player_rank"] is not None:
@@ -675,6 +707,20 @@ class FakeMCApp:
     def get_online_status(self, mojang_data) -> str:
         active_user_status = OnlineStatus(mojang_data["username"], mojang_data["uuid"], self.hypixel_api_key) # TODO UPDATE THIS TO USE NEW DATA FROMAT
         return active_user_status.start_requests()
+
+    def get_cache_size(self) -> str:
+        """Returns cache size in KB as a formatted string"""
+        cache_location = current_directory / "storage" / "cache.db"
+        if not cache_location.exists():
+            app_logger.warning("Cache doesn't exist")
+            return f"0 KB"
+
+        try:
+            size_in_bytes = os.path.getsize(cache_location)
+            return f"{size_in_bytes / 1024} KB"
+        except OSError as e:
+            app_logger.error(f"OS error occured when accessing cache size: {e}")
+            return "Error"
 
     # favorites
     def favorites_clicked(self, e) -> None:
@@ -849,13 +895,41 @@ class FakeMCApp:
         self.save_settings()
         app_logger.info(f"Updated guild members to fetch: {self.guild_members_to_fetch}")
 
+    def update_cache_time(self, e) -> None:
+        if self.cache_time_input.value != "":
+            self.cache_time = int(self.cache_time_input.value)
+        else:
+            self.cache_time = 0
+
+        self.settings["cache_time"] = self.cache_time
+        self.save_settings()
+        app_logger.info(f"Updated cache time: {self.cache_time}")
+
+    def cache_switch_changed(self, e) -> None:
+        if self.enable_cache_switch.value:
+            self.cache_enabled = True
+            app_logger.info(f"updated caching to: {self.cache_enabled}")
+            self.save_settings()
+        else:
+            self.cache_enabled = False
+            app_logger.info(f"updated caching to: {self.cache_enabled}")
+            self.save_settings()
+
+    def clear_cache(self, e) -> None:
+        cache_instance = CacheManager()
+        cache_instance.clear_cache()
+        self.cache_size_text.value = self.get_cache_size()
+        self.page.update()
+
     # settings 
     def save_settings(self) -> None:
         settings = {
             "light_theme": self.app_theme_light,
             "max_guild_members": self.guild_members_to_fetch,
             "hypixel_integration": self.hypixel_integration_enabled,
-            "completed_onboarding_flow": self.completed_onboarding_flow
+            "completed_onboarding_flow": self.completed_onboarding_flow,
+            "cache_enabled": self.cache_enabled,
+            "cache_time": self.cache_time
             }
         with open(self.settings_location, "w") as file:
             json.dump(settings, file, indent = 4)
