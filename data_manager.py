@@ -85,22 +85,86 @@ class DataManager:
         return response
     
     def get_hypixel_data(self, uuid, guild_members_to_fetch) -> dict:
+        """
+        Fetches Hypixel data for a given UUID.
+        returns a dictionary with the following keys
+        - status: "success", "date_error", or "failed"
+        - first_login: the first login date of the player in a formatted string
+        - player_rank: the rank of the player
+        - guild_members: a list of UUIDs of the guild members
+        - guild_name: the name of the guild
+        - guild_id: the ID of the guild
+        """
+
+        valid_cache = self.cache_instance.check_hypixel_player_cache(uuid, 120)
+        logger.info(f"valid cache for {uuid}: {valid_cache}")
+
+        if valid_cache:
+            logger.info(f"using cache for {uuid}")
+            data_from_cache = self.cache_instance.get_hypixel_player_cache(uuid)
+            if data_from_cache:
+                data_from_cache["sorce"] = "cache"
+                response = {
+                    "status": "incomplete",
+                    "source": "cache",
+                    "first_login": data_from_cache["first_login"],
+                    "player_rank": data_from_cache["rank"],
+                    "guild_id": data_from_cache["guild_id"],
+                }
+                logger.info(f"data from cache for {uuid}: {data_from_cache}")
+                if data_from_cache["guild_id"]:
+                    logger.info(f"guild id found in cache for player {uuid}: {data_from_cache['guild_id']}")
+                    data_from_guild_cache = self.cache_instance.get_hypixel_guild_cache(data_from_cache["guild_id"])
+
+                    guild_cache_valid = self.cache_instance.check_hypixel_guild_cache(data_from_cache["guild_id"], 120)
+                        
+                    if data_from_guild_cache and guild_cache_valid:
+                        response["status"] = "success"
+                        response["guild_members"] = data_from_guild_cache["member_uuids"]
+                        response["guild_name"] = data_from_guild_cache["guild_name"]
+                        return response
+                    else:
+                        logger.info(f"No guild cache found for {data_from_cache['guild_id']}, fetching new data")
+                        return self._fetch_hypixel_data(uuid, guild_members_to_fetch)
+                else:
+                    logger.info(f"No guild id found in cache for player {uuid}")
+                    response["status"] = "success"
+                    response["guild_members"] = []
+                    response["guild_name"] = None
+                    return response
+            else:
+                logger.info(f"No valid cache found for {uuid}, fetching new data")
+                return self._fetch_hypixel_data(uuid, guild_members_to_fetch)
+        else:
+            logger.info(f"cache not valid for {uuid}, fetching new data")
+            return self._fetch_hypixel_data(uuid, guild_members_to_fetch)
+            
+    
+    def _fetch_hypixel_data(self, uuid: str, guild_members_to_fetch: int) -> dict:
+        """
+        Fetches Hypixel data for a given UUID.
+        Returns a dictionary with the Hypixel data.
+        """
         hypxiel_data_instance = GetHypixelData(uuid, self.hypixel_api_key, guild_members_to_fetch)
         first_login, player_rank, hypixel_request_status = hypxiel_data_instance.get_basic_data()
 
         guild_members = []
-        guild_members, guild_name = hypxiel_data_instance.get_guild_info()
+        guild_members, guild_name, guild_id = hypxiel_data_instance.get_guild_info()
 
         response = {
             "status": hypixel_request_status,
+            "source": "hypixel_api",
             "first_login": first_login,
             "player_rank": player_rank,
             "guild_members": guild_members,
-            "guild_name": guild_name
+            "guild_name": guild_name,
+            "guild_id": guild_id
         }
 
+        self.cache_instance.add_hypixel_cache(uuid, response)
         return response
-    
+        
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     load_dotenv()

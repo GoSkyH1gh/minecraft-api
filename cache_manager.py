@@ -2,12 +2,20 @@ import sqlite3
 import logging
 from pathlib import Path
 import time
+import json
 
 logger = logging.getLogger(__file__)
 
 current_directory = Path(__file__).parent
 
 class CacheManager:
+    """
+    Manages caching of Mojang and Hypixel data using SQLite.
+    Currently, there are three tables:
+    - mojang_cache: Stores Mojang data including UUID, username, cape information, and timestamps.
+    - hypixel_player_cache: Stores Hypixel player data including UUID, first login, rank, guild ID, and timestamps.
+    - hypixel_guild_cache: Stores Hypixel guild data including guild ID, guild name, member UUIDs, and timestamps.
+    """
     def __init__(self):
         self.conn = sqlite3.Connection(current_directory / "storage" / "cache.db")
         self.cursor = self.conn.cursor()
@@ -21,23 +29,36 @@ class CacheManager:
             skin_showcase_b64 TEXT,
             cape_front_b64 TEXT,
             cape_back_b64 TEXT,
-            timestamp INTEGER NOT NULL)
+            timestamp INTEGER NOT NULL);
         """)
 
-        #self.cursor.execute("""
-        #CREATE TABLE IF NOT EXISTS hypixel_cache (
-        #    uuid TEXT PRIMARY KEY,
-        #    first_login TEXT,
-        #    rank TEXT,
-        #    guild_name TEXT
-        #""")
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS hypixel_player_cache (
+            uuid TEXT PRIMARY KEY,
+            first_login TEXT,
+            rank TEXT,
+            guild_id TEXT,
+            timestamp INTEGER NOT NULL);
+        """)
+
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS hypixel_guild_cache (
+            guild_id TEXT PRIMARY KEY,
+            guild_name TEXT,
+            member_uuids TEXT,
+            timestamp INTEGER NOT NULL);
+        """)
 
     def check_mojang_cache(self, search_term: str, time_between_cache: int = 360):
+        """
+        Check if Mojang cache is valid for a given UUID or username.
+        Returns True if cache is valid, False otherwise.
+        """
         results = self.cursor.execute("SELECT timestamp FROM mojang_cache WHERE uuid = ? OR LOWER(username) = ?", (search_term.lower(), search_term.lower(),)).fetchall()
         try:
             last_timestamp = results[0][0]
             print(last_timestamp)
-            if self.is_cache_valid(last_timestamp, time_between_cache):
+            if self._is_cache_valid(last_timestamp, time_between_cache):
                 logger.info(f"Cache found for UUID: {search_term}, returning True")
                 return True
             else:
@@ -81,12 +102,100 @@ class CacheManager:
             VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))""", (uuid, username, has_cape, cape_name, skin_showcase_b64, cape_front_b64, cape_back_b64))
         self.conn.commit()
     
-    def add_hypixel_cache(self, uuid: str, hypixel_data: str):
-        conn = sqlite3.Connection(current_directory / "storage" / "cache.db")
+    def add_hypixel_cache(self, uuid, hypixel_data: dict):
+        if hypixel_data["status"] != "success":
+            logger.warning(f"Invalid Hypixel data for UUID {uuid}: {hypixel_data['status']}, cache not updated")
+            return
+        self.cursor.execute(
+            """INSERT OR REPLACE INTO hypixel_player_cache (uuid, first_login, rank, guild_id, timestamp)
+            VALUES (?, ?, ?, ?, strftime('%s', 'now'))""", 
+            (uuid, hypixel_data["first_login"], hypixel_data["player_rank"], hypixel_data["guild_id"])
+        )
 
-        cursor = conn.cursor()
+        json_guild_members = json.dumps(hypixel_data["guild_members"])
+        logger.info(f"Adding Hypixel guild cache for UUID {uuid} with members: {json_guild_members}")
+
+        self.cursor.execute(
+            """INSERT OR REPLACE INTO hypixel_guild_cache (guild_id, guild_name, member_uuids, timestamp)
+            VALUES (?, ?, ?, strftime('%s', 'now'))""", 
+            (hypixel_data["guild_id"], hypixel_data["guild_name"], json_guild_members)
+        )
+        self.conn.commit()
     
-    def is_cache_valid(self, timestamp, threshold):
+    def check_hypixel_player_cache(self, uuid: str, time_between_cache: int = 360):
+        """
+        Check if Hypixel player cache is valid for a given UUID.
+        Returns True if cache is valid, False otherwise.
+        """
+        results = self.cursor.execute("SELECT timestamp FROM hypixel_player_cache WHERE uuid = ?", (uuid,)).fetchall()
+        try:
+            last_timestamp = results[0][0]
+            if self._is_cache_valid(last_timestamp, time_between_cache):
+                logger.info(f"Cache found for UUID: {uuid}, returning True")
+                return True
+            else:
+                logger.info(f"Cache expired for UUID: {uuid}, returning False")
+                return False
+        except IndexError:
+            logger.info(f"No cache found for UUID: {uuid}")
+            return False
+    
+    def get_hypixel_player_cache(self, uuid: str):
+        """Retrieve Hypixel player cache data for a given UUID."""
+        
+        self.cursor.execute("SELECT * FROM hypixel_player_cache WHERE uuid = ?", (uuid,))
+        results = self.cursor.fetchone()
+        
+        if results:
+            logger.info(f"Cache found for UUID: {uuid}")
+            return {
+                "uuid": results[0],
+                "first_login": results[1],
+                "rank": results[2],
+                "guild_id": results[3],
+                "timestamp": results[4]
+            }
+        else:
+            logger.info(f"No cache found for UUID: {uuid}")
+            return None
+    
+    def check_hypixel_guild_cache(self, guild_id: str, time_between_cache: int = 720):
+        """
+        Check if Hypixel guild cache is valid for a given guild ID.
+        Returns True if cache is valid, False otherwise.
+        """
+        results = self.cursor.execute("SELECT timestamp FROM hypixel_guild_cache WHERE guild_id = ?", (guild_id,)).fetchall()
+        try:
+            last_timestamp = results[0][0]
+            if self._is_cache_valid(last_timestamp, time_between_cache):
+                logger.info(f"Cache found for guild ID: {guild_id}, returning True")
+                return True
+            else:
+                logger.info(f"Cache expired for guild ID: {guild_id}, returning False")
+                return False
+        except IndexError:
+            logger.info(f"No cache found for guild ID: {guild_id}")
+            return False
+        
+    def get_hypixel_guild_cache(self, guild_id: str):
+        """Retrieve Hypixel guild cache data for a given guild ID."""
+        
+        self.cursor.execute("SELECT * FROM hypixel_guild_cache WHERE guild_id = ?", (guild_id,))
+        results = self.cursor.fetchone()
+        
+        if results:
+            logger.info(f"Cache found for guild ID: {guild_id}")
+            return {
+                "guild_id": results[0],
+                "guild_name": results[1],
+                "member_uuids": json.loads(results[2]),
+                "timestamp": results[3]
+            }
+        else:
+            logger.info(f"No cache found for guild ID: {guild_id}")
+            return None
+    
+    def _is_cache_valid(self, timestamp, threshold):
         return time.time() - timestamp < threshold
 
 
@@ -94,6 +203,21 @@ if __name__ == "__main__":
     cache_instance = CacheManager()
     #cache_instance.add_mojang_cache("3ff2e63ad63045e0b96f57cd0eae708d", "GoSkyHigh", True, "Purple Heart", "base64yap", None, None)
     #results = cache_instance.cursor.execute("SELECT * FROM mojang_cache").fetchall()
-    #cache_instance.cursor.execute("DROP TABLE mojang_cache")
+    #cache_instance.cursor.execute("DROP TABLE hypixel_cache")
+    """
+    cache_instance.add_hypixel_cache(
+        "3ff2e63ad63045e0b96f57cd0eae708d", 
+        hypixel_data = {
+            "status": "success",
+            "first_login": "01/2021",
+            "rank": "VIP",
+            "guild_id": "1234567890",
+            "guild_name": "Test Guild",
+            "guild_members": ["uuid1", "uuid2", "uuid3"]
+        }
+    )
+    """
+    print(cache_instance.check_hypixel_guild_cache("1234567890", 360))
+    print(cache_instance.get_hypixel_guild_cache("1234567890"))
     print(f"finished")
     
