@@ -630,10 +630,10 @@ class FakeMCApp:
                 self.hypixel_request_error_banner.content.value = f"An unexpected error occurred."
                 app_logger.error(f"Didn't receive all arguments for get_basic_data from class GetHypixelData")
             
-            if self.guild_name is None:
+            if hypixel_data["guild_name"] is None:
                 self.guild_name_text.value = ""
             app_logger.debug(hypixel_data["guild_members"])
-            app_logger.info(f"{mojang_data["username"]}'s guild is {self.guild_name}")
+            app_logger.info(f"{mojang_data["username"]}'s guild is {hypixel_data["guild_name"]}")
         else:
             self.guild_list_view.controls.clear()
             self.page.update()
@@ -647,13 +647,12 @@ class FakeMCApp:
         if hypixel_data["guild_members"] is not None:
             self.guild_list_view.controls.clear()
             for member in hypixel_data["guild_members"]:
-                guild_showcase = GetMojangAPIData(None, member)
-                guild_member_name = guild_showcase.get_name()
+                guild_member_name = member["name"]
                 if guild_member_name is not None:
                     self.guild_list_view.controls.append(
                         ft.Button(
                             text = guild_member_name,
-                            on_click = lambda e, name_to_pass = guild_member_name: self.update_contents(name_to_pass)
+                            on_click = lambda e, name_to_pass = member["uuid"]: self.update_contents(name_to_pass)
                         )
                     )
                 self.guild_name_text.value = hypixel_data["guild_name"]

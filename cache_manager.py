@@ -112,7 +112,9 @@ class CacheManager:
             (uuid, hypixel_data["first_login"], hypixel_data["player_rank"], hypixel_data["guild_id"])
         )
 
-        json_guild_members = json.dumps(hypixel_data["guild_members"])
+        #logger.info(hypixel_data)
+        json_guild_members = json.dumps(hypixel_data["member_uuids"])
+        
         logger.info(f"Adding Hypixel guild cache for UUID {uuid} with members: {json_guild_members}")
 
         self.cursor.execute(
@@ -195,6 +197,26 @@ class CacheManager:
             logger.info(f"No cache found for guild ID: {guild_id}")
             return None
     
+    def get_usernames_for_uuids_from_cache(self, uuids: list[str]) -> dict:
+        """
+        Retrieve usernames for a list of UUIDs from the Mojang cache.
+        Returns a dictionary mapping UUIDs to usernames.
+        """
+        if not uuids:
+            return {}
+        
+        # This creates a query like: SELECT ... WHERE uuid IN (?, ?, ?, ...)
+        placeholders = ','.join('?' for _ in uuids)
+        query = f"SELECT uuid, username FROM mojang_cache WHERE uuid IN ({placeholders})"
+        
+        try:
+            rows = self.cursor.execute(query, uuids).fetchall()
+            # This is a dictionary comprehension, a concise way to build a dict from a list.
+            return {uuid: username for uuid, username in rows}
+        except Exception as e:
+            logger.error(f"Error during bulk UUID lookup: {e}")
+            return {}
+
     def _is_cache_valid(self, timestamp, threshold):
         return time.time() - timestamp < threshold
 
