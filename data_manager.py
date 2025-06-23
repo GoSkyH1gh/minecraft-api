@@ -65,8 +65,18 @@ class DataManager:
                 source = "cache"
             except KeyError as e:
                 logger.error(f"KeyError while getting data from cache: {e}")
-                status = "failed"
-                source = "cache"
+                return {
+                    "status": "failed",
+                    "source": "cache",
+                    "uuid": None,
+                    "username": None,
+                    "has_cape": None,
+                    "skin_showcase_b64": None,
+                    "cape_showcase_b64": None,
+                    "cape_back_b64": None
+                }
+
+
             logger.debug(f"data from cache: {data_from_cache}")
         
 
@@ -119,8 +129,11 @@ class DataManager:
                     guild_cache_valid = self.cache_instance.check_hypixel_guild_cache(data_from_cache["guild_id"], 120)
                         
                     if data_from_guild_cache and guild_cache_valid:
+
+                        resolved_guild_members = self._resolve_guild_member_names(data_from_guild_cache["member_uuids"])
+
                         response["status"] = "success"
-                        response["guild_members"] = data_from_guild_cache["member_uuids"]
+                        response["guild_members"] = resolved_guild_members
                         response["guild_name"] = data_from_guild_cache["guild_name"]
                         return response
                     else:
@@ -151,25 +164,77 @@ class DataManager:
         guild_members = []
         guild_members, guild_name, guild_id = hypxiel_data_instance.get_guild_info()
 
+        # Prepare data to cache, only store raw uuids
+        data_to_cache = {
+            "status": hypixel_request_status,
+            "first_login": first_login,
+            "player_rank": player_rank,
+            "guild_name": guild_name,
+            "guild_id": guild_id,
+            "member_uuids": guild_members
+        }
+
+        # Only add to cache if the request was successful
+        if hypixel_request_status == "success":
+            self.cache_instance.add_hypixel_cache(uuid, data_to_cache)
+
+        resolved_guild_members = self._resolve_guild_member_names(guild_members)
         response = {
             "status": hypixel_request_status,
             "source": "hypixel_api",
             "first_login": first_login,
             "player_rank": player_rank,
-            "guild_members": guild_members,
+            "guild_members": resolved_guild_members,
             "guild_name": guild_name,
             "guild_id": guild_id
         }
 
-        self.cache_instance.add_hypixel_cache(uuid, response)
         return response
+    
+    def _resolve_guild_member_names(self, member_uuids: list[str]) -> list[dict]:
+        """
+        Takes a list of UUIDs and returns a list of resolved members
+        (e.g., [{"uuid": ..., "name": ...}]), using the cache intelligently.
+        """
+        if not member_uuids:
+            return []
+
+        logger.info(f"Attempting to resolve {len(member_uuids)} member names.")
         
+        
+        resolved_members = {}
+        cached_names = self.cache_instance.get_usernames_for_uuids_from_cache(member_uuids)
+        resolved_members.update(cached_names)
+        
+        logger.info(f"Found {len(cached_names)} names in cache.")
+
+        
+        missing_uuids = [uuid for uuid in member_uuids if uuid not in cached_names]
+        
+        if not missing_uuids:
+            logger.info("All names were resolved from cache.")
+        else:
+            logger.info(f"Fetching {len(missing_uuids)} missing names from Mojang API.")
+            # fetch missing names from Mojang API
+            for uuid in missing_uuids:
+                
+                mojang_data = self.get_mojang_data(uuid)
+                if mojang_data and mojang_data["status"] == "success":
+                    resolved_members[uuid] = mojang_data["username"]
+                else:
+                    resolved_members[uuid] = "N/A" # Handle failed lookups
+
+        # Create the final list of dictionaries with UUIDs and names
+        final_list = [{"uuid": uuid, "name": resolved_members.get(uuid, "N/A")} for uuid in member_uuids]
+        return final_list
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     load_dotenv()
     hypixel_api_key = os.getenv("HYPIXEL_API_KEY")
     data_manager = DataManager(hypixel_api_key)
-    search_term = "miro407"
-    response = data_manager.get_mojang_data(search_term)
+    search_term = "3ff2e63ad63045e0b96f57cd0eae708d"
+    response = data_manager.get_hypixel_data(search_term, 15)
     print(response)
+    for member in response["guild_members"]:
+        print(f"UUID: {member['uuid']}, Name: {member['name']}")
