@@ -154,7 +154,7 @@ class FakeMCApp:
             elevation = 1,
             margin = ft.padding.only(right = 60),
             visible = False
-        ) 
+        )
 
         self.guild_name_text = ft.Text(value = "", text_align = ft.TextAlign.CENTER, size = 16)
         self.guild_list_view = ft.ListView(spacing = 10, width = 200, height = 450, auto_scroll = True)
@@ -602,18 +602,32 @@ class FakeMCApp:
     def load_hypixel_data(self, mojang_data: dict) -> None:
         # --- Hypixel api integration ---
         if mojang_data["uuid"] is not None:
+            self.hypixel_info_card.content.content = ft.ProgressRing()
+            self.first_login_text.value = ""
+            self.player_rank_text.value = ""
+            self.hypixel_info_card.visible = True
+            self.guild_name_text.value = ""
+            self.guild_list_view.controls.clear()
+            self.page.update()
             hypxiel_data_instance = DataManager(self.hypixel_api_key)
             hypixel_data = hypxiel_data_instance.get_hypixel_data(mojang_data["uuid"], self.guild_members_to_fetch)
             if hypixel_data["status"] == "success":
                 if hypixel_data["first_login"] is not None and hypixel_data["player_rank"] is not None:
+                    app_logger.info("displaying hypixel info card")
+                    self.hypixel_info_card.content.content = ft.Column(
+                        controls= [self.first_login_text, self.player_rank_text, self.player_status_row]
+                        )
                     self.hypixel_info_card.visible = True
                     self.first_login_text.value = f"Account first seen on: {hypixel_data["first_login"]}"
                     self.player_rank_text.value = f"Player rank: {hypixel_data["player_rank"]}"
                     self.page.update()
                 else:
+                    self.hypixel_info_card.content.content = ft.Column(
+                        controls= [self.first_login_text, self.player_rank_text, self.player_status_row]
+                        )
+                    self.hypixel_info_card.visible = False
                     self.first_login_text.value = ""
                     self.player_rank_text.value = ""
-                    self.hypixel_info_card.visible = False
                     self.guild_name_text.value = ""
                     self.page.update()
             # error handling
@@ -704,7 +718,7 @@ class FakeMCApp:
         favorites = self.load_favorites()
         for favorite in favorites:
             if favorite["uuid"] == uuid_to_delete:
-                app_logger.warning(f"favorite {favorite["name"]} has been removed")
+                app_logger.warning(f"favorite {favorite["username"]} has been removed")
                 favorites.remove(favorite)
                 break
         self.save_favorites(favorites)
