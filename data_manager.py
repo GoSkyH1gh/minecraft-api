@@ -11,9 +11,11 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 class DataManager:
-    def __init__(self, hypixel_api_key: str):
+    def __init__(self, hypixel_api_key: str, cache_enabled: bool = True, cache_time: int = 300):
         self.hypixel_api_key = hypixel_api_key
         self.cache_instance = CacheManager()
+        self.cache_time = cache_time
+        self.cache_enabled = cache_enabled
 
     def get_mojang_data(self, search_term: str) -> dict:
         """
@@ -33,24 +35,9 @@ class DataManager:
         status = "error"
         source = None
         
-        valid_cache = self.cache_instance.check_mojang_cache(search_term, 120)
+        valid_cache = self.cache_instance.check_mojang_cache(search_term, self.cache_time)
         logger.info(f"valid cache for {search_term}: {valid_cache}")
-        if not valid_cache: # if cache is not valid, it will update the cache
-            if len(search_term) <= 16: # if text inputted is less than 16 chars (max username length) search is treated as a name
-                mojang_instance = GetMojangAPIData(search_term)
-            else:
-                mojang_instance = GetMojangAPIData(None, search_term)
-            formated_username, uuid, has_cape, skin_id, cape_id, lookup_failed, cape_showcase_b64, cape_back_b64, cape_showcase, skin_showcase_b64 = mojang_instance.get_data()
-            if not lookup_failed:
-                logger.info(f"added cache for {formated_username}")
-                status = "success"
-                source = "mojang_api"
-                self.cache_instance.add_mojang_cache(uuid, formated_username, has_cape, cape_id, skin_showcase_b64, cape_showcase_b64, cape_back_b64)
-            else:
-                logger.info(f"lookup failed for {search_term}, not adding to cache")
-                status = "lookup_failed"
-                source = "mojang_api"
-        else:
+        if valid_cache and self.cache_enabled: # if cache is valid, get data from cache
             logger.info(f"using cache for {search_term}")
             data_from_cache = self.cache_instance.get_data_from_mojang_cache(search_term)
             try:
@@ -75,11 +62,28 @@ class DataManager:
                     "cape_showcase_b64": None,
                     "cape_back_b64": None
                 }
-
-
+                
             logger.debug(f"data from cache: {data_from_cache}")
-        
 
+        else: # if cache is not valid, get data from mojang api
+            if len(search_term) <= 16: # if text inputted is less than 16 chars (max username length) search is treated as a name
+                mojang_instance = GetMojangAPIData(search_term)
+            else:
+                mojang_instance = GetMojangAPIData(None, search_term)
+            formated_username, uuid, has_cape, skin_id, cape_id, lookup_failed, cape_showcase_b64, cape_back_b64, cape_showcase, skin_showcase_b64 = mojang_instance.get_data()
+            if not lookup_failed:
+                logger.info(f"added cache for {formated_username}")
+                status = "success"
+                source = "mojang_api"
+                if self.cache_enabled:
+                    self.cache_instance.add_mojang_cache(uuid, formated_username, has_cape, cape_id, skin_showcase_b64, cape_showcase_b64, cape_back_b64)
+                else:
+                    logger.info(f"result is valid for {formated_username}, but cache is disabled")
+            else:
+                logger.info(f"lookup failed for {search_term}, not adding to cache")
+                status = "lookup_failed"
+                source = "mojang_api"
+        
         response = {
             "status": status,
             "source": source,
@@ -93,12 +97,15 @@ class DataManager:
         }
 
         return response
+
+
     
     def get_hypixel_data(self, uuid, guild_members_to_fetch) -> dict:
         """
         Fetches Hypixel data for a given UUID.
         returns a dictionary with the following keys
         - status: "success", "date_error", or "failed"
+        - source: "cache" or "hypixel_api"
         - first_login: the first login date of the player in a formatted string
         - player_rank: the rank of the player
         - guild_members: a list of UUIDs of the guild members
@@ -106,14 +113,14 @@ class DataManager:
         - guild_id: the ID of the guild
         """
 
-        valid_cache = self.cache_instance.check_hypixel_player_cache(uuid, 120)
+        valid_cache = self.cache_instance.check_hypixel_player_cache(uuid, self.cache_time)
         logger.info(f"valid cache for {uuid}: {valid_cache}")
 
-        if valid_cache:
+        if valid_cache and self.cache_enabled:
             logger.info(f"using cache for {uuid}")
             data_from_cache = self.cache_instance.get_hypixel_player_cache(uuid)
             if data_from_cache:
-                data_from_cache["sorce"] = "cache"
+                data_from_cache["source"] = "cache"
                 response = {
                     "status": "incomplete",
                     "source": "cache",
@@ -126,7 +133,7 @@ class DataManager:
                     logger.info(f"guild id found in cache for player {uuid}: {data_from_cache['guild_id']}")
                     data_from_guild_cache = self.cache_instance.get_hypixel_guild_cache(data_from_cache["guild_id"])
 
-                    guild_cache_valid = self.cache_instance.check_hypixel_guild_cache(data_from_cache["guild_id"], 120)
+                    guild_cache_valid = self.cache_instance.check_hypixel_guild_cache(data_from_cache["guild_id"], self.cache_time)
                         
                     if data_from_guild_cache and guild_cache_valid:
 
@@ -167,6 +174,7 @@ class DataManager:
         # Prepare data to cache, only store raw uuids
         data_to_cache = {
             "status": hypixel_request_status,
+            "source": "hypixel_api",
             "first_login": first_login,
             "player_rank": player_rank,
             "guild_name": guild_name,
@@ -175,7 +183,7 @@ class DataManager:
         }
 
         # Only add to cache if the request was successful
-        if hypixel_request_status == "success":
+        if hypixel_request_status == "success" and self.cache_enabled:
             self.cache_instance.add_hypixel_cache(uuid, data_to_cache)
 
         resolved_guild_members = self._resolve_guild_member_names(guild_members)
@@ -203,10 +211,13 @@ class DataManager:
         
         
         resolved_members = {}
-        cached_names = self.cache_instance.get_usernames_for_uuids_from_cache(member_uuids)
-        resolved_members.update(cached_names)
-        
-        logger.info(f"Found {len(cached_names)} names in cache.")
+        if self.cache_enabled:
+            cached_names = self.cache_instance.get_usernames_for_uuids_from_cache(member_uuids)
+            resolved_members.update(cached_names)
+            logger.info(f"Found {len(cached_names)} names in cache.")
+        else:
+            logger.info("Cache is disabled, not checking cache for guild uuids")
+            cached_names = []
 
         
         missing_uuids = [uuid for uuid in member_uuids if uuid not in cached_names]
@@ -217,7 +228,6 @@ class DataManager:
             logger.info(f"Fetching {len(missing_uuids)} missing names from Mojang API.")
             # fetch missing names from Mojang API
             for uuid in missing_uuids:
-                
                 mojang_data = self.get_mojang_data(uuid)
                 if mojang_data and mojang_data["status"] == "success":
                     resolved_members[uuid] = mojang_data["username"]

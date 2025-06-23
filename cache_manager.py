@@ -220,6 +220,16 @@ class CacheManager:
     def _is_cache_valid(self, timestamp, threshold):
         return time.time() - timestamp < threshold
 
+    def clear_cache(self):
+        self.cursor.execute("DELETE FROM hypixel_guild_cache")
+        self.cursor.execute("DELETE FROM hypixel_player_cache")
+        self.cursor.execute("DELETE FROM mojang_cache")
+        self.conn.commit()
+
+        self.cursor.execute("VACUUM") # clear extra space
+        self.conn.commit()
+        logger.info("Cache has been cleared")
+        self.conn.close()
 
 if __name__ == "__main__":
     cache_instance = CacheManager()
