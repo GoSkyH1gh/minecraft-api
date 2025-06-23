@@ -104,8 +104,8 @@ class GetHypixelData:
     def get_guild_info(self):
         """
         requires uuid and api key
-        returns a list with a specified number of guild members and guild_name
-        return None, None if it fails
+        returns a list with a specified number of guild members, a guild_name and guild id
+        return None, None, None if it fails
         """
         try:
             payload = {"player": self.uuid}
@@ -121,30 +121,31 @@ class GetHypixelData:
             logger.debug(guild_response)
             if guild_response.json()["guild"] is None:
                 logger.info("no guild")
-                return None, None
+                return None, None, None
 
             guild_response_json = guild_response.json()
 
             members = guild_response_json["guild"]["members"]
             guild_name = guild_response_json["guild"]["name"]
+            guild_id = guild_response_json["guild"]["_id"]
             guild_members = []
             for index, member in enumerate(members):
                 if index < self.guild_members_to_fetch: # gets the first x members of the guild
                     guild_members.append(member["uuid"])
 
-            return guild_members, guild_name
+            return guild_members, guild_name, guild_id
         except requests.exceptions.HTTPError as e:
             logger.error(f"HTTP error occurred: {e}")
-            return None, None
+            return None, None, None
         except requests.exceptions.RequestException as e:
             logger.error(f"Request exception occurred: {e}")
-            return None, None
+            return None, None, None
         except KeyError as e:
             logger.warning(f"couldn't find {e}")
-            return None, None
+            return None, None, None
         except Exception as e:
             logger.warning(f"something went wrong while getting hypixel guild info: {e}")
-            return None, None
+            return None, None, None
 
 
 if __name__ == "__main__":
